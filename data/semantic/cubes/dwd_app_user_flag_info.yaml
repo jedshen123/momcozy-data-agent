@@ -1,0 +1,101 @@
+name: dwd_app_user_flag_info
+title: APP用户标签明细信息
+sql_table: dwd_app_user_flag_info
+description: APP用户每天的活跃状态标签，包括社区活跃、设备页访问、统计页访问等多个维度活跃标识
+dimensions:
+  - name: uid
+    type: string
+    sql: uid
+    title: 用户ID
+    description: 用户id
+  - name: country_ad_ch
+    type: string
+    sql: country_ad_ch
+    title: 国家地区中文简称
+    description: 国家地区中文简称
+  - name: country_locate_state
+    type: string
+    sql: country_locate_state
+    title: 国家地区所在洲中文名称
+    description: 国家地区所在洲中文名称
+  - name: data_source
+    type: string
+    sql: data_source
+    title: 数据来源
+    description: 数据来源
+  - name: app_active_date
+    type: string
+    sql: app_active_date
+    title: app用户激活日期
+    description: app用户的激活日期，用于统计新增用户数
+    meta:
+      ai_context: 用于统计新增用户数
+  - name: deleted
+    type: string
+    sql: deleted
+    title: 是否注销标识
+    description: 是否注销标识
+  - name: active_status
+    type: string
+    sql: active_status
+    title: 激活状态
+    description: 激活状态
+  - name: event_date
+    type: string
+    sql: event_date
+    title: 活跃日期
+    description: 事件日期
+    meta:
+      ai_context: 用于统计活跃用户数
+  - name: act_flag
+    type: string
+    sql: act_flag
+    title: 活跃用户标识
+    description: 活跃用户标识
+  - name: moment_act_flag
+    type: string
+    sql: moment_act_flag
+    title: 社区活跃标识
+    description: "判断用户在社区上是否活跃\n可选值：1(活跃,表示有发帖、点赞、评论等行为)、0(不活跃)"
+    meta:
+      ai_context: 一般用于维度过滤，得到一个社区或非社区活跃的用户群体集合
+  - name: id
+    type: string
+    sql: "CONCAT(CAST(event_date AS VARCHAR), '-', uid)"
+    title: 主键ID
+    description: 主键ID
+    primary_key: true
+measures:
+  - name: dau
+    title: 日活跃用户（DAU）
+    type: count_distinct
+    sql: "{CUBE}.uid"
+    description: 判断当天用户是否app有活跃
+    meta:
+      ai_context: 统计当日有活跃行为的独立用户数。通过event_date维度可以查询任意日期的APP活跃用户。
+  - name: new_app_user_count
+    title: APP新增用户数
+    type: count_distinct
+    sql: "{CUBE}.uid"
+    description: 统计新增用户数，通过app_active_date维度筛选任意时间段的新增用户。
+    filters:
+      - sql: "{CUBE}.act_flag = 1 and {CUBE}.app_active_date = {CUBE}.app_active_date"
+    meta:
+      ai_context: 统计首次在APP活跃的新增用户数。通过app_active_date维度筛选任意时间段的新增用户。
+  - name: bind_active_user_count
+    title: 有效绑定设备的活跃用户数
+    type: count_distinct
+    sql: "{CUBE}.uid"
+    description: 有效绑定了设备并且整体活跃的用户数
+    filters:
+      - sql: "({dwd_app_device_binding_info.status} = 1 AND {dwd_app_device_binding_info.dev_create_time} <= {CUBE}.event_date) OR ({dwd_app_device_binding_info.status} = 2 AND {dwd_app_device_binding_info.dev_update_time} >= {CUBE}.event_date AND {dwd_app_device_binding_info.dev_create_time} <= {CUBE}.event_date)"
+    meta:
+      ai_context: 统计事件日期当天与智能设备有效绑定的整体活跃去重用户数
+joins:
+  - name: dwd_app_device_binding_info
+    relationship: one_to_many
+    sql: "{CUBE}.uid = {dwd_app_device_binding_info.uid}"
+meta:
+  ai_context: 分析APP用户的活跃情况
+  business_domain: 用户行为
+  update_frequency: 日级

@@ -1,0 +1,17 @@
+{
+  "table_id": "dwd_app_user_flag_info",
+  "columns": [
+    { "name": "uid", "type": "string", "display_name": "用户ID", "comment": "用户唯一标识，关联用户画像表" },
+    { "name": "event_date", "type": "date", "display_name": "事件日期", "comment": "数据统计日期，格式 YYYY-MM-DD" },
+    { "name": "browse_cn", "type": "bigint", "display_name": "社区浏览次数", "comment": "当日在社区模块的浏览次数" },
+    { "name": "order_cn", "type": "bigint", "display_name": "下单次数", "comment": "当日成功下单次数" },
+    { "name": "pay_cn", "type": "bigint", "display_name": "支付次数", "comment": "当日完成支付次数" },
+    { "name": "pay_amount", "type": "decimal(18,2)", "display_name": "支付金额", "comment": "当日支付总金额，单位元" },
+    { "name": "session_cn", "type": "bigint", "display_name": "会话次数", "comment": "当日启动 App 的会话数" },
+    { "name": "app_duration", "type": "bigint", "display_name": "使用时长(秒)", "comment": "当日在 App 内的总使用时长" },
+    { "name": "cart_add_cn", "type": "bigint", "display_name": "加购次数", "comment": "当日加入购物车的次数" },
+    { "name": "collect_cn", "type": "bigint", "display_name": "收藏次数", "comment": "当日收藏商品的次数" },
+    { "name": "share_cn", "type": "bigint", "display_name": "分享次数", "comment": "当日分享内容的次数" },
+    { "name": "dt", "type": "string", "display_name": "分区日期", "comment": "Hive 分区字段，格式 YYYYMMDD" }
+  ]
+}

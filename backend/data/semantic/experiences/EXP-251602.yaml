@@ -1,0 +1,13 @@
+id: EXP-251602
+original_question: 最近 30 天活跃用户数趋势
+analysis_conclusion: 全区域在 2026-04-20 ~ 2026-05-20 的DAU表现已汇总
+similar_questions: []
+execution_path:
+  metrics:
+    - DAU
+  views:
+    - app_standard_indicators
+  filters: []
+source: 分析沉淀
+usage_count: 0
+created_at: '2026-05-20'

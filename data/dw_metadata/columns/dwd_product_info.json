@@ -1,0 +1,23 @@
+{
+  "table_id": "dwd_product_info",
+  "columns": [
+    { "name": "sku_id", "type": "string", "display_name": "SKU ID", "comment": "商品 SKU 唯一标识" },
+    { "name": "spu_id", "type": "string", "display_name": "SPU ID", "comment": "商品 SPU 唯一标识" },
+    { "name": "sku_name", "type": "string", "display_name": "SKU 名称", "comment": "商品完整名称" },
+    { "name": "spu_name", "type": "string", "display_name": "SPU 名称", "comment": "商品 SPU 名称" },
+    { "name": "category_l1_id", "type": "string", "display_name": "一级品类ID", "comment": "" },
+    { "name": "category_l1", "type": "string", "display_name": "一级品类", "comment": "例：母婴 / 智能家居" },
+    { "name": "category_l2_id", "type": "string", "display_name": "二级品类ID", "comment": "" },
+    { "name": "category_l2", "type": "string", "display_name": "二级品类", "comment": "例：月子服 / 哺乳内衣" },
+    { "name": "brand_id", "type": "string", "display_name": "品牌ID", "comment": "" },
+    { "name": "brand_name", "type": "string", "display_name": "品牌名称", "comment": "" },
+    { "name": "price", "type": "decimal(10,2)", "display_name": "售价", "comment": "当前售价，单位元" },
+    { "name": "cost_price", "type": "decimal(10,2)", "display_name": "成本价", "comment": "采购成本价" },
+    { "name": "stock_count", "type": "int", "display_name": "库存数量", "comment": "当前可用库存" },
+    { "name": "status", "type": "string", "display_name": "上架状态", "comment": "on_sale/off_sale/deleted" },
+    { "name": "weight", "type": "decimal(8,3)", "display_name": "重量(kg)", "comment": "商品重量" },
+    { "name": "main_image", "type": "string", "display_name": "主图URL", "comment": "" },
+    { "name": "created_at", "type": "timestamp", "display_name": "创建时间", "comment": "商品上架时间" },
+    { "name": "updated_at", "type": "timestamp", "display_name": "更新时间", "comment": "最近一次信息更新时间" }
+  ]
+}

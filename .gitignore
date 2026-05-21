@@ -1,0 +1,29 @@
+# 不纳入版本库（按产品要求）
+design/
+
+# 依赖与构建产物
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# 环境与密钥
+.env
+.env.local
+.env.*.local
+
+# 日志与本地数仓
+*.log
+data/warehouse/*.sqlite
+data/warehouse/*.sqlite-*
+backend/data/warehouse/*.sqlite
+backend/data/warehouse/*.sqlite-*
+
+# 系统与 IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Vite
+frontend/dist/

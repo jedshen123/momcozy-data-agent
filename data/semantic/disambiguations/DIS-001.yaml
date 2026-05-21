@@ -1,0 +1,18 @@
+id: DIS-001
+concept_a:
+  name: 月度销售额
+  definition: 按月统计的已完成订单金额总和
+  entity_type: metric
+  entity_id: MTR-001
+concept_b:
+  name: GMV
+  definition: 按月统计的所有订单金额总和（含未支付）
+  entity_type: metric
+  entity_id: MTR-002
+core_difference: 月度销售额仅统计已支付完成的订单，GMV 包含所有下单金额
+usage_scenarios:
+  - condition: 需要财务口径的实际收入
+    use: 月度销售额
+  - condition: 需要业务规模和市场表现
+    use: GMV
+auto_generated: false

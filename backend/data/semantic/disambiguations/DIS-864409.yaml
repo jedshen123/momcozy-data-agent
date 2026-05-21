@@ -1,0 +1,18 @@
+id: DIS-864409
+concept_a:
+  name: GMV
+  definition: 所有下单订单的总金额，含未付款、取消、退款
+  entity_type: metric
+  entity_id: MTR-002401
+concept_b:
+  name: 收入
+  definition: 实际收到的款项，仅计已支付且未退款的订单
+  entity_type: metric
+  entity_id: MTR-686516
+core_difference: GMV是流水（含未实付），收入是落袋（仅实收）
+usage_scenarios:
+  - condition: 市场热度评估
+    use: GMV
+  - condition: 财务核算
+    use: 收入
+auto_generated: false

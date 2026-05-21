@@ -1,0 +1,78 @@
+cubes:
+  - name: dwd_app_device_binding_info
+    title: APP设备绑定明细信息
+    sql_table: dwd_app_device_binding_info
+    description: APP设备绑定明细信息
+    dimensions:
+      - name: uid
+        type: string
+        sql: uid
+        title: uid
+        description: uid
+      - name: country_ad_ch
+        type: string
+        sql: country_ad_ch
+        title: 国家地区中文简称
+        description: 国家地区中文简称
+        meta:
+          ai_context: 国家分类
+      - name: country_locate_state
+        type: string
+        sql: country_locate_state
+        title: 国家地区所在洲中文名称
+        description: 国家地区所在洲中文名称
+      - name: data_source
+        type: string
+        sql: data_source
+        title: 数据来源
+        description: 数据来源
+        meta:
+          ai_context: 地区分类，如EC（美东）、EU（欧洲）、AP（亚太）等
+      - name: deviceid
+        type: string
+        sql: deviceid
+        title: 设备ID
+        description: 设备id
+      - name: type
+        type: string
+        sql: type
+        title: 绑定类型
+        description: 绑定类型
+      - name: status
+        type: string
+        sql: status
+        title: 绑定状态
+        description: 绑定状态
+        meta:
+          ai_context: 设备的绑定状态，1为绑定，2为解绑
+      - name: model
+        type: string
+        sql: model
+        title: 设备类型
+        description: 设备类型
+        meta:
+          ai_context: 设备类型，如M9、M5P0、Air1等
+      - name: dev_create_time
+        type: time
+        sql: dev_create_time
+        title: 设备绑定时间
+        description: 设备绑定时间
+        meta:
+          ai_context: 设备绑定时间
+      - name: dev_update_time
+        type: time
+        sql: dev_update_time
+        title: 设备解绑时间
+        description: 设备解绑时间
+        meta:
+          ai_context: 设备解绑时间
+    measures:
+      - name: bind_user_count
+        title: 智能设备绑定总用户数
+        type: count_distinct
+        sql: "{CUBE}.uid"
+        description: 绑定设备用户数
+        filters:
+          - sql: "{CUBE}.status = '1'"
+        meta:
+          ai_context: 用于统计绑定智能设备的总用户数

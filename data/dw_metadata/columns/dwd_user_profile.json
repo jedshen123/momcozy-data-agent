@@ -1,0 +1,27 @@
+{
+  "table_id": "dwd_user_profile",
+  "columns": [
+    { "name": "uid", "type": "string", "display_name": "用户ID", "comment": "用户唯一标识" },
+    { "name": "nickname", "type": "string", "display_name": "昵称", "comment": "" },
+    { "name": "gender", "type": "string", "display_name": "性别", "comment": "male/female/unknown" },
+    { "name": "age", "type": "int", "display_name": "年龄", "comment": "用户年龄，未填写为 NULL" },
+    { "name": "register_time", "type": "timestamp", "display_name": "注册时间", "comment": "" },
+    { "name": "register_channel", "type": "string", "display_name": "注册渠道", "comment": "organic/paid/referral" },
+    { "name": "member_level", "type": "string", "display_name": "会员等级", "comment": "普通/银牌/金牌/钻石" },
+    { "name": "member_expire_date", "type": "date", "display_name": "会员到期日", "comment": "" },
+    { "name": "city", "type": "string", "display_name": "所在城市", "comment": "" },
+    { "name": "province", "type": "string", "display_name": "所在省份", "comment": "" },
+    { "name": "phone_brand", "type": "string", "display_name": "手机品牌", "comment": "Apple/Xiaomi/Huawei 等" },
+    { "name": "last_login_time", "type": "timestamp", "display_name": "最近登录时间", "comment": "" },
+    { "name": "total_order_cn", "type": "bigint", "display_name": "累计订单数", "comment": "" },
+    { "name": "total_pay_amount", "type": "decimal(18,2)", "display_name": "累计支付金额", "comment": "" },
+    { "name": "rfm_segment", "type": "string", "display_name": "RFM 分层", "comment": "高价值/潜力/沉睡/流失" },
+    { "name": "is_new_user", "type": "int", "display_name": "是否新用户", "comment": "注册 30 天内为 1" },
+    { "name": "referrer_uid", "type": "string", "display_name": "推荐人UID", "comment": "通过分享链接注册的推荐人" },
+    { "name": "birthday", "type": "date", "display_name": "生日", "comment": "" },
+    { "name": "is_deleted", "type": "int", "display_name": "是否注销", "comment": "1-已注销" },
+    { "name": "ds", "type": "string", "display_name": "数据快照日期", "comment": "每日快照分区" },
+    { "name": "tags", "type": "string", "display_name": "用户标签", "comment": "JSON 数组，多个标签" },
+    { "name": "app_version", "type": "string", "display_name": "App 版本", "comment": "最近使用的 App 版本" }
+  ]
+}

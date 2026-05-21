@@ -1,0 +1,33 @@
+{
+  "table_id": "dwd_order_detail",
+  "columns": [
+    { "name": "order_id", "type": "string", "display_name": "订单ID", "comment": "订单唯一标识" },
+    { "name": "uid", "type": "string", "display_name": "用户ID", "comment": "下单用户唯一标识" },
+    { "name": "sku_id", "type": "string", "display_name": "SKU ID", "comment": "商品 SKU 唯一标识" },
+    { "name": "order_time", "type": "timestamp", "display_name": "下单时间", "comment": "订单创建时间戳" },
+    { "name": "pay_time", "type": "timestamp", "display_name": "支付时间", "comment": "完成支付时间戳，未支付为 NULL" },
+    { "name": "order_amount", "type": "decimal(18,2)", "display_name": "订单金额", "comment": "订单原始金额" },
+    { "name": "discount_amount", "type": "decimal(18,2)", "display_name": "优惠金额", "comment": "优惠券、活动折扣金额" },
+    { "name": "pay_amount", "type": "decimal(18,2)", "display_name": "实付金额", "comment": "用户实际支付金额" },
+    { "name": "order_status", "type": "string", "display_name": "订单状态", "comment": "待付款/待发货/已发货/已完成/已取消" },
+    { "name": "channel", "type": "string", "display_name": "下单渠道", "comment": "app/wechat/web" },
+    { "name": "category_l1", "type": "string", "display_name": "一级品类", "comment": "商品一级分类名称" },
+    { "name": "category_l2", "type": "string", "display_name": "二级品类", "comment": "商品二级分类名称" },
+    { "name": "quantity", "type": "int", "display_name": "购买数量", "comment": "本订单购买该商品数量" },
+    { "name": "refund_flag", "type": "int", "display_name": "退款标志", "comment": "0-无退款 1-部分退款 2-全额退款" },
+    { "name": "is_first_order", "type": "int", "display_name": "是否首单", "comment": "1-首单 0-非首单" },
+    { "name": "platform", "type": "string", "display_name": "平台", "comment": "iOS/Android/H5" },
+    { "name": "province", "type": "string", "display_name": "省份", "comment": "用户收货地址所在省份" },
+    { "name": "city", "type": "string", "display_name": "城市", "comment": "用户收货地址所在城市" },
+    { "name": "coupon_id", "type": "string", "display_name": "优惠券ID", "comment": "使用的优惠券 ID，无则为 NULL" },
+    { "name": "freight_amount", "type": "decimal(18,2)", "display_name": "运费", "comment": "本订单运费金额" },
+    { "name": "order_date", "type": "date", "display_name": "下单日期", "comment": "下单日期，从 order_time 提取" },
+    { "name": "buyer_remark", "type": "string", "display_name": "买家备注", "comment": "买家留言内容" },
+    { "name": "seller_id", "type": "string", "display_name": "卖家ID", "comment": "对应卖家唯一标识" },
+    { "name": "logistics_company", "type": "string", "display_name": "物流公司", "comment": "发货物流公司名称" },
+    { "name": "tracking_no", "type": "string", "display_name": "物流单号", "comment": "快递跟踪单号" },
+    { "name": "complete_time", "type": "timestamp", "display_name": "完成时间", "comment": "订单确认收货时间" },
+    { "name": "cancel_reason", "type": "string", "display_name": "取消原因", "comment": "订单取消原因" },
+    { "name": "dt", "type": "string", "display_name": "分区日期", "comment": "Hive 分区字段" }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "table_id": "ads_marketing_roi",
+  "columns": [
+    { "name": "stat_date", "type": "date", "display_name": "统计日期", "comment": "广告数据统计日期" },
+    { "name": "channel", "type": "string", "display_name": "渠道", "comment": "抖音/小红书/微信/百度/腾讯" },
+    { "name": "campaign_id", "type": "string", "display_name": "计划ID", "comment": "广告计划唯一标识" },
+    { "name": "campaign_name", "type": "string", "display_name": "计划名称", "comment": "" },
+    { "name": "ad_group_id", "type": "string", "display_name": "广告组ID", "comment": "" },
+    { "name": "ad_id", "type": "string", "display_name": "广告ID", "comment": "" },
+    { "name": "cost", "type": "decimal(18,2)", "display_name": "花费", "comment": "当日广告花费，单位元" },
+    { "name": "impression", "type": "bigint", "display_name": "曝光量", "comment": "当日广告展示次数" },
+    { "name": "click", "type": "bigint", "display_name": "点击量", "comment": "当日广告点击次数" },
+    { "name": "order_cn", "type": "bigint", "display_name": "带来订单数", "comment": "归因到该广告的订单数" },
+    { "name": "pay_amount", "type": "decimal(18,2)", "display_name": "带来GMV", "comment": "归因到该广告的支付金额" },
+    { "name": "new_user_cn", "type": "bigint", "display_name": "拉新用户数", "comment": "通过该广告新注册用户数" },
+    { "name": "ctr", "type": "decimal(8,4)", "display_name": "点击率", "comment": "click/impression" },
+    { "name": "cpc", "type": "decimal(10,4)", "display_name": "单次点击成本", "comment": "cost/click" },
+    { "name": "roi", "type": "decimal(10,4)", "display_name": "ROI", "comment": "pay_amount/cost" },
+    { "name": "dt", "type": "string", "display_name": "分区日期", "comment": "" }
+  ]
+}

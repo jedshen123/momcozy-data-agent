@@ -1,0 +1,137 @@
+export type AnalysisPhase =
+  | 'idle'
+  | 'clarifying'
+  | 'intent_confirm'
+  | 'executing'
+  | 'result'
+  | 'deposition'
+  | 'capability_gap'
+
+export type GapType = 'A' | 'B' | 'C'
+
+export interface TurnMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface IntentCard {
+  summary: string
+  timeRange: string
+  defaultNote: string
+  metric?: string
+  metricId?: string
+  view?: string
+}
+
+export interface ExecutionStep {
+  id: string
+  label: string
+  status: 'pending' | 'running' | 'done' | 'error'
+  highlight?: 'exp_reuse' | 'dis_apply'
+  detail?: string
+}
+
+export interface CapabilityGapPayload {
+  missingConcept: string
+  alternatives: string[]
+  recordedNote: string
+}
+
+export interface ResultPayload {
+  summary: string
+  chartTitle: string
+  breakdown: Array<{ label: string; value: string; width: string }>
+  series?: Array<{ date: string; value: number }>
+  sql?: string
+  rowCount?: number
+}
+
+export interface ContextSnapshot {
+  statusLabel: string
+  metric?: string
+  view?: string
+  timeRange?: string
+  disApplied?: string
+  expHit?: string
+  executedSql?: string
+  queryEngine?: string
+}
+
+export interface DepositionPrefill {
+  question: string
+  conclusion: string
+  path: {
+    metrics: string[]
+    views: string[]
+    filters: string[]
+  }
+}
+
+export interface AnalysisSession {
+  phase: AnalysisPhase
+  turns: TurnMessage[]
+  chips?: string[]
+  gapType?: GapType
+  intent?: IntentCard
+  intentEditing?: boolean
+  steps?: ExecutionStep[]
+  capabilityGap?: CapabilityGapPayload
+  result?: ResultPayload
+  depositionPrefill?: DepositionPrefill
+  context: ContextSnapshot
+  /** 累积的用户原始问题（首问） */
+  userQuery: string
+  clarifyRound: number
+}
+
+export type ClientEvent =
+  | { type: 'user_message'; text: string }
+  | { type: 'confirm_intent' }
+  | { type: 'edit_intent' }
+  | { type: 'update_intent'; intent: IntentCard }
+  | { type: 'capability_continue' }
+  | { type: 'capability_new_question' }
+  | { type: 'feedback_ok' }
+  | { type: 'feedback_deep' }
+  | { type: 'feedback_reframe' }
+  | { type: 'save_experience'; conclusion: string }
+  | { type: 'skip_experience' }
+  | { type: 'new_conversation' }
+
+export type SseEvent =
+  | { type: 'session'; session: AnalysisSession }
+  | { type: 'token'; content: string }
+  | { type: 'error'; message: string }
+  | { type: 'done' }
+
+export interface MetricRecord {
+  id: string
+  name: string
+  view?: string
+}
+
+export interface DisambiguationRecord {
+  id: string
+  conceptA: string
+  conceptB: string
+  entityIdA?: string
+  entityIdB?: string
+  coreDifference: string
+}
+
+export interface ExperienceRecord {
+  id: string
+  originalQuestion: string
+  similarQuestions: string[]
+  conclusion: string
+}
+
+export function emptySession(): AnalysisSession {
+  return {
+    phase: 'idle',
+    turns: [],
+    context: { statusLabel: '待开始' },
+    userQuery: '',
+    clarifyRound: 0
+  }
+}

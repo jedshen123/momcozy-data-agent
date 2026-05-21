@@ -1,0 +1,79 @@
+views:
+  - name: app_standard_indicators
+    cubes:
+      - join_path: ads_app_core_indicator_info_di
+        includes:
+          - busi_date
+          - data_source
+          - country_locate_state
+          - country_ad_ch
+          - app_user_cn
+          - app_dau
+          - new_app_dau
+          - old_app_dau
+          - app_wau
+          - app_mau
+          - moment_dau
+          - new_moment_dau
+          - old_moment_dau
+          - moment_wau
+          - moment_mau
+          - act_user_after1_cn
+          - act_user_after7_cn
+          - act_user_after30_cn
+          - new_act_user_after1_cn
+          - new_act_user_after7_cn
+          - new_act_user_after30_cn
+          - old_act_user_after1_cn
+          - old_act_user_after7_cn
+          - old_act_user_after30_cn
+          - moment_user_after1_cn
+          - moment_user_after7_cn
+          - moment_user_after30_cn
+          - post_user_after1_cn
+          - post_user_after7_cn
+          - post_user_after30_cn
+          - post_user_cn
+          - user_device_binding_cn
+          - device_binding_user_cn
+          - ogc_post_cn
+          - m_app_user_cn
+          - m_app_dau
+          - m_new_app_dau
+          - m_old_app_dau
+          - m_app_wau
+          - m_app_mau
+          - m_moment_dau
+          - m_new_moment_dau
+          - m_old_moment_dau
+          - m_moment_wau
+          - m_moment_mau
+          - m_act_user_after1_cn
+          - m_act_user_after7_cn
+          - m_act_user_after30_cn
+          - m_new_act_user_after1_cn
+          - m_new_act_user_after7_cn
+          - m_new_act_user_after30_cn
+          - m_old_act_user_after1_cn
+          - m_old_act_user_after7_cn
+          - m_old_act_user_after30_cn
+          - m_moment_user_after1_cn
+          - m_moment_user_after7_cn
+          - m_moment_user_after30_cn
+          - m_post_user_after1_cn
+          - m_post_user_after7_cn
+          - m_post_user_after30_cn
+          - m_post_user_cn
+          - m_user_device_binding_cn
+          - m_device_binding_user_cn
+          - m_ogc_post_cn
+        prefix: true
+    title: APP核心运营指标视图
+    description: APP核心运营指标视图
+    meta:
+      ai_context: |-
+        本视图数据来自预聚合表，查询速度最快，口径最准。
+        【支持指标】APP用户总数、DAU、WAU、 MAU、 留存用户数、社区用户数、发帖用户数、创作者留存用户数
+        【支持维度】日期、数据来源、国家地区
+        注意：如果用户询问的维度不在上述列表中，请切换至明细分析视图app_detail_exploration。
+

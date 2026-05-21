@@ -1,0 +1,11 @@
+id: MTR-686516
+name: DAU
+type: simple
+view: app_standard_indicators
+measure: m_app_mau
+filter_sql: status = 1 and u = 2
+dimensions:
+  - busi_date
+  - data_source
+  - app_user_cn
+  - moment_dau

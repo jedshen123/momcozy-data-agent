@@ -1,0 +1,52 @@
+[
+  {
+    "id": "dwd_app_user_flag_info",
+    "name": "dwd_app_user_flag_info",
+    "schema": "lute_app_dw",
+    "display_name": "用户行为标识表",
+    "description": "记录用户在 App 内的各类行为标识和统计，日级更新",
+    "column_count": 12,
+    "row_count_estimate": "2000万",
+    "update_frequency": "日级"
+  },
+  {
+    "id": "dwd_order_detail",
+    "name": "dwd_order_detail",
+    "schema": "lute_app_dw",
+    "display_name": "订单明细表",
+    "description": "记录每笔订单的完整信息，包含商品、金额、状态等",
+    "column_count": 28,
+    "row_count_estimate": "5000万",
+    "update_frequency": "日级"
+  },
+  {
+    "id": "dwd_product_info",
+    "name": "dwd_product_info",
+    "schema": "lute_app_dw",
+    "display_name": "商品信息表",
+    "description": "记录所有 SKU 的基础信息，包含品类、价格、库存等",
+    "column_count": 18,
+    "row_count_estimate": "10万",
+    "update_frequency": "小时级"
+  },
+  {
+    "id": "dwd_user_profile",
+    "name": "dwd_user_profile",
+    "schema": "lute_app_dw",
+    "display_name": "用户画像表",
+    "description": "汇总用户基础属性、会员等级、注册信息等用户维度数据",
+    "column_count": 22,
+    "row_count_estimate": "800万",
+    "update_frequency": "日级"
+  },
+  {
+    "id": "ads_marketing_roi",
+    "name": "ads_marketing_roi",
+    "schema": "lute_app_ads",
+    "display_name": "营销 ROI 汇总表",
+    "description": "各渠道广告投放效果汇总，含花费、曝光、点击、转化等核心指标",
+    "column_count": 16,
+    "row_count_estimate": "30万",
+    "update_frequency": "日级"
+  }
+]

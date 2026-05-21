@@ -1,0 +1,14 @@
+id: VW-001
+name: sales_monthly_channel
+display_name: 月度销售额（按渠道）
+description: 按月份和渠道维度统计销售额
+cubes:
+  - app_user_flag
+fields:
+  - name: event_date
+    source: app_user_flag.event_date
+    type: dimension
+  - name: order_cn
+    source: app_user_flag.order_cn
+    type: measure
+joins: []

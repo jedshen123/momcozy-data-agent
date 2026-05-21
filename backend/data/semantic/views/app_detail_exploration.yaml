@@ -1,0 +1,52 @@
+views:
+  - name: app_detail_exploration
+    cubes:
+      - join_path: dwd_app_user_flag_info
+        includes:
+          - event_date
+          - moment_act_flag
+          - bind_active_user_count
+          - uid
+          - country_ad_ch
+          - country_locate_state
+          - data_source
+          - app_active_date
+          - deleted
+          - active_status
+          - act_flag
+          - device_vis_flag
+          - stat_vis_flag
+          - dynamic_vis_flag
+          - account_vis_flag
+          - member_vis_flag
+          - browse_cn
+          - ogc_browse_cn
+          - item_id_arr
+          - ogc_item_id_arr
+          - dau
+          - new_app_user_count
+          - all_app_user_count
+        prefix: true
+      - join_path: dwd_app_user_flag_info.dwd_app_device_binding_info
+        prefix: true
+        includes:
+          - model
+          - country_ad_ch
+          - dev_create_time
+          - dev_update_time
+          - status
+          - uid
+          - country_locate_state
+          - data_source
+          - bind_user_count
+    meta:
+      ai_context: |
+        本视图基于明细数据，支持任意维度的聚合，统计APP用户数相关，包括用户活跃度分析等，优先使用app_standard_indicators聚合好的数据，如果分析维度不满足再使用本视图进行分析
+        【适用场景】
+          - 统计每日活跃用户数
+          - 分析用户活跃趋势
+          - 查询特定用户的活跃状态
+          - APP用户数 
+    title: APP用户明细探索视图
+    description: 统计APP用户数相关，包括APP活跃用户数、APP新增用户数、APP总用户数等
+

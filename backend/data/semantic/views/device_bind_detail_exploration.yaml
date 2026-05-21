@@ -1,0 +1,23 @@
+views:
+  - name: device_bind_detail_exploration
+    cubes:
+      - join_path: dwd_app_device_binding_info
+        prefix: true
+        includes:
+          - uid
+          - country_ad_ch
+          - country_locate_state
+          - data_source
+          - status
+          - model
+          - dev_create_time
+          - dev_update_time
+          - bind_user_count
+    title: 设备绑定明细探索视图
+    meta:
+      ai_context: |2
+         本视图基于明细数据，支持多种维度的聚合
+        【适用场景】
+          - 统计绑定智能设备的用户数
+    description: 设备绑定明细探索视图
+

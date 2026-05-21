@@ -1,0 +1,171 @@
+import { buildAnalysisQuerySpec } from './analysisQuerySpec.js'
+import { buildBreakdownQuery, buildTrendQuery } from './cubeQueryBuilder.js'
+import { cubeLoad, cubeSql } from './cubeClient.js'
+import { formatAnalysisResult } from './formatResult.js'
+import { getViewEntry } from './viewCatalog.js'
+import { resolveViewMember } from './memberResolve.js'
+import {
+  mergeRatioSeries,
+  rowsToBreakdown,
+  rowsToMetricSeries
+} from './cubeRows.js'
+import type { IntentCard } from '../analysis/types.js'
+import type { DisambiguationRecord, MetricRecord } from '../analysis/types.js'
+import type { AnalysisQueryOutput, QueryPlan, QueryRow } from './types.js'
+
+function viewFromMember(member: string): string {
+  return member.split('.')[0] || ''
+}
+
+async function timeDimensionForView(viewName: string): Promise<string> {
+  const view = await getViewEntry(viewName)
+  return resolveViewMember(viewName, view.timeDimensionShort, view)
+}
+
+export async function runCubeAnalysisQuery(params: {
+  metric: MetricRecord
+  intent: IntentCard
+  userQuery: string
+  dis?: DisambiguationRecord | null
+}): Promise<AnalysisQueryOutput> {
+  const spec = await buildAnalysisQuerySpec({
+    metricId: params.metric.id,
+    intent: params.intent,
+    userQuery: params.userQuery,
+    dis: params.dis
+  })
+
+  let trendRows: QueryRow[] = []
+  let breakdownRows: QueryRow[] = []
+  const queries: { label: string; query: object }[] = []
+
+  if (spec.type === 'composite' && spec.compositeMeasures) {
+    const { numerator, denominator } = spec.compositeMeasures
+    const numView = viewFromMember(numerator)
+    const denView = viewFromMember(denominator)
+    const numTime = await timeDimensionForView(numView)
+    const denTime = await timeDimensionForView(denView)
+
+    const numQ = buildTrendQuery({ ...spec, timeDimension: numTime }, numerator)
+    const denQ = buildTrendQuery({ ...spec, timeDimension: denTime }, denominator)
+    queries.push({ label: '趋势-分子', query: numQ }, { label: '趋势-分母', query: denQ })
+
+    const [numRes, denRes] = await Promise.all([cubeLoad(numQ), cubeLoad(denQ)])
+    const series = mergeRatioSeries(
+      numRes.data as QueryRow[],
+      denRes.data as QueryRow[],
+      numerator,
+      denominator,
+      numTime,
+      denTime
+    )
+    trendRows = series.map(s => ({
+      dt: s.date,
+      metric_value: s.value
+    }))
+
+    const breakdownShort = spec.breakdownDimension?.split('.').pop()
+    const denViewEntry = await getViewEntry(denView)
+    const numViewEntry = await getViewEntry(numView)
+    let denBreakDim: string | null = null
+    let numBreakDim: string | null = null
+    if (breakdownShort && denViewEntry.includes.has(breakdownShort)) {
+      denBreakDim = await resolveViewMember(denView, breakdownShort, denViewEntry)
+    }
+    if (breakdownShort && numViewEntry.includes.has(breakdownShort)) {
+      numBreakDim = await resolveViewMember(numView, breakdownShort, numViewEntry)
+    }
+
+    if (denBreakDim && numBreakDim) {
+      const denBreakQ = buildBreakdownQuery(
+        { ...spec, timeDimension: denTime, breakdownDimension: denBreakDim },
+        denominator
+      )
+      queries.push({ label: '拆分', query: denBreakQ })
+      const denBreakRes = await cubeLoad(denBreakQ)
+      const numBreakQ = buildBreakdownQuery(
+        { ...spec, timeDimension: numTime, breakdownDimension: numBreakDim },
+        numerator
+      )
+      queries.push({ label: '拆分-分子', query: numBreakQ })
+      const numBreakRes = await cubeLoad(numBreakQ)
+
+      const denMap = rowsToBreakdown(
+        denBreakRes.data as QueryRow[],
+        denominator,
+        denBreakDim
+      )
+      const numMap = rowsToBreakdown(
+        numBreakRes.data as QueryRow[],
+        numerator,
+        numBreakDim
+      )
+      const denByLabel = new Map(denMap.map(b => [b.label, b.value]))
+      breakdownRows = numMap.map(n => ({
+        dim_label: n.label,
+        metric_value: (denByLabel.get(n.label) || 0) === 0 ? 0 : n.value / (denByLabel.get(n.label) || 1)
+      }))
+    }
+  } else {
+    const measure = spec.primaryMeasure!
+    const trendQ = buildTrendQuery(spec, measure)
+    const breakQ = buildBreakdownQuery(spec, measure)
+    queries.push({ label: '趋势', query: trendQ }, { label: '拆分', query: breakQ })
+
+    const [trendRes, breakRes] = await Promise.all([cubeLoad(trendQ), cubeLoad(breakQ)])
+    trendRows = rowsToMetricSeries(
+      trendRes.data as QueryRow[],
+      measure,
+      spec.timeDimension
+    ).map(s => ({ dt: s.date, metric_value: s.value }))
+
+    if (spec.breakdownDimension) {
+      breakdownRows = rowsToBreakdown(
+        breakRes.data as QueryRow[],
+        measure,
+        spec.breakdownDimension
+      ).map(b => ({ dim_label: b.label, metric_value: b.value }))
+    } else {
+      const v = trendRows.length
+        ? Number(trendRows[trendRows.length - 1].metric_value)
+        : 0
+      breakdownRows = [{ dim_label: '合计', metric_value: v }]
+    }
+  }
+
+  let displaySql = ''
+  try {
+    const parts = await Promise.all(
+      queries.map(async q => `-- ${q.label}\n${await cubeSql(q.query as import('./cubeTypes.js').CubeQuery)}`)
+    )
+    displaySql = parts.join('\n\n')
+  } catch {
+    displaySql = queries.map(q => `-- ${q.label}\n${JSON.stringify(q.query, null, 2)}`).join('\n\n')
+  }
+
+  const plan: QueryPlan = {
+    engine: 'cube',
+    sql: displaySql,
+    displaySql,
+    metricId: spec.metricId,
+    metricName: spec.metricName,
+    viewName: spec.viewName,
+    table: spec.viewName,
+    measureColumn: spec.primaryMeasure || spec.compositeMeasures?.numerator || '',
+    timeColumn: spec.timeDimension,
+    breakdownDimension: spec.breakdownDimension,
+    timeStart: spec.timeStart,
+    timeEnd: spec.timeEnd,
+    cubeQueries: queries.map(q => q.query)
+  }
+
+  const region = /华东|华北|华南/.exec(params.userQuery)?.[0] ?? null
+
+  return formatAnalysisResult({
+    plan,
+    trendRows,
+    breakdownRows,
+    userQuery: params.userQuery,
+    region
+  })
+}

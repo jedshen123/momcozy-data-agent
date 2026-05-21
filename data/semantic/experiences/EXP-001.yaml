@@ -1,0 +1,20 @@
+id: EXP-001
+original_question: 上个月各渠道的销售额是多少？
+analysis_conclusion: 2024年3月各渠道销售额：线上 120万，线下 80万，总计 200万
+similar_questions:
+  - 上月各渠道销售情况
+  - 3月份渠道销售额分布
+execution_path:
+  metrics:
+    - MTR-001
+  views:
+    - VW-001
+  filters:
+    - field: event_date
+      value: "2024-03"
+version_lock:
+  MTR-001: v1.0
+  VW-001: v1.0
+created_at: "2024-03-15T10:30:00Z"
+usage_count: 5
+source: analysis_thread

@@ -1,0 +1,19 @@
+id: MTR-001
+name: monthly_sales
+display_name: 月度销售额
+type: atomic
+description: 按月统计的销售总额（财务口径）
+calculation:
+  agg_function: SUM
+  field: order_cn
+  filters:
+    - field: status
+      operator: "="
+      value: completed
+  time_field: event_date
+  time_granularity: month
+bound_view: VW-001
+aliases:
+  - 月销售额
+  - 每月销售
+disambiguation: 与 GMV 的区别在于仅统计已完成订单

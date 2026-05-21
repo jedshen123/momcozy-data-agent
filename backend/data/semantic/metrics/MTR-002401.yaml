@@ -1,0 +1,7 @@
+id: MTR-002401
+name: 客单价
+type: composite
+formula: ${m1} / ${m2}
+measure_map:
+  m1: app_detail_exploration.bind_active_user_count
+  m2: app_standard_indicators.m_old_app_dau

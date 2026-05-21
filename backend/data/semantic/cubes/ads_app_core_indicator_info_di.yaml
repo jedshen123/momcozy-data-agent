@@ -1,0 +1,393 @@
+cubes:
+  - name: ads_app_core_indicator_info_di
+    title: APP用户核心指标聚合信息
+    sql_table: ads_app_core_indicator_info_di
+    description: APP用户核心指标聚合信息
+    dimensions:
+      - name: busi_date
+        type: string
+        sql: busi_date
+        title: 业务日期
+        description: 业务日期
+        primary_key: true
+      - name: data_source
+        type: string
+        sql: data_source
+        title: 数据来源
+        description: 数据来源
+        primary_key: true
+      - name: country_locate_state
+        type: string
+        sql: country_locate_state
+        title: 国家地区所在洲中文名称
+        description: 国家地区所在洲中文名称
+        primary_key: true
+      - name: country_ad_ch
+        type: string
+        sql: country_ad_ch
+        title: 国家地区中文简称
+        description: 国家地区中文简称
+        primary_key: true
+      - name: app_user_cn
+        type: number
+        sql: app_user_cn
+        title: APP用户总数
+        description: APP用户总数
+      - name: app_dau
+        type: number
+        sql: app_dau
+        title: APP日活用户数DAU
+        description: APP日活用户数DAU
+      - name: new_app_dau
+        type: number
+        sql: new_app_dau
+        title: APP日活新客用户数DAU
+        description: APP日活新客用户数DAU
+      - name: old_app_dau
+        type: number
+        sql: old_app_dau
+        title: APP日活老客用户数DAU
+        description: APP日活老客用户数DAU
+      - name: app_wau
+        type: number
+        sql: app_wau
+        title: APP周活用户数WAU
+        description: APP周活用户数WAU
+      - name: app_mau
+        type: number
+        sql: app_mau
+        title: APP月活用户数MAU
+        description: APP月活用户数MAU
+      - name: moment_dau
+        type: number
+        sql: moment_dau
+        title: 社区日活用户数DAU
+        description: 社区日活用户数DAU
+      - name: new_moment_dau
+        type: number
+        sql: new_moment_dau
+        title: 社区日活新客用户数DAU
+        description: 社区日活新客用户数DAU
+      - name: old_moment_dau
+        type: number
+        sql: old_moment_dau
+        title: 社区日活老客用户数DAU
+        description: 社区日活老客用户数DAU
+      - name: moment_wau
+        type: number
+        sql: moment_wau
+        title: 社区周活用户数WAU
+        description: 社区周活用户数WAU
+      - name: moment_mau
+        type: number
+        sql: moment_mau
+        title: 社区月活用户数MAU
+        description: 社区月活用户数MAU
+      - name: act_user_after1_cn
+        type: number
+        sql: act_user_after1_cn
+        title: 全量次日留存用户数
+        description: 全量次日留存用户数
+      - name: act_user_after7_cn
+        type: number
+        sql: act_user_after7_cn
+        title: 全量7日留存用户数
+        description: 全量7日留存用户数
+      - name: act_user_after30_cn
+        type: number
+        sql: act_user_after30_cn
+        title: 全量30日留存用户数
+        description: 全量30日留存用户数
+      - name: new_act_user_after1_cn
+        type: number
+        sql: new_act_user_after1_cn
+        title: 新客次日留存用户数
+        description: 新客次日留存用户数
+      - name: new_act_user_after7_cn
+        type: number
+        sql: new_act_user_after7_cn
+        title: 新客7日留存用户数
+        description: 新客7日留存用户数
+      - name: new_act_user_after30_cn
+        type: number
+        sql: new_act_user_after30_cn
+        title: 新客30日留存用户数
+        description: 新客30日留存用户数
+      - name: old_act_user_after1_cn
+        type: number
+        sql: old_act_user_after1_cn
+        title: 老客次日留存用户数
+        description: 老客次日留存用户数
+      - name: old_act_user_after7_cn
+        type: number
+        sql: old_act_user_after7_cn
+        title: 老客7日留存用户数
+        description: 老客7日留存用户数
+      - name: old_act_user_after30_cn
+        type: number
+        sql: old_act_user_after30_cn
+        title: 老客30日留存用户数
+        description: 老客30日留存用户数
+      - name: moment_user_after1_cn
+        type: number
+        sql: moment_user_after1_cn
+        title: 社区用户次日留用户数
+        description: 社区用户次日留用户数
+      - name: moment_user_after7_cn
+        type: number
+        sql: moment_user_after7_cn
+        title: 社区用户7日留用户数
+        description: 社区用户7日留用户数
+      - name: moment_user_after30_cn
+        type: number
+        sql: moment_user_after30_cn
+        title: 社区用户30日留用户数
+        description: 社区用户30日留用户数
+      - name: post_user_after1_cn
+        type: number
+        sql: post_user_after1_cn
+        title: 创作者次日留用户数
+        description: 创作者次日留用户数
+      - name: post_user_after7_cn
+        type: number
+        sql: post_user_after7_cn
+        title: 创作者7日留用户数
+        description: 创作者7日留用户数
+      - name: post_user_after30_cn
+        type: number
+        sql: post_user_after30_cn
+        title: 创作者30日留用户数
+        description: 创作者30日留用户数
+      - name: post_user_cn
+        type: number
+        sql: post_user_cn
+        title: 发帖用户数
+        description: 发帖用户数
+      - name: user_device_binding_cn
+        type: number
+        sql: user_device_binding_cn
+        title: 用户智能设备绑定总数
+        description: 用户智能设备绑定总数
+      - name: device_binding_user_cn
+        type: number
+        sql: device_binding_user_cn
+        title: 智能设备绑定总用户数
+        description: 智能设备绑定总用户数
+      - name: ogc_post_cn
+        type: number
+        sql: ogc_post_cn
+        title: OGC发帖量
+        description: OGC发帖量
+    measures:
+      - name: m_app_user_cn
+        type: sum
+        sql: "{CUBE}.app_user_cn"
+        title: APP用户总数
+        description: APP用户总数
+        meta:
+          ai_context: APP用户总数
+      - name: m_app_dau
+        type: sum
+        sql: "{CUBE}.app_dau"
+        title: APP日活用户数DAU
+        description: APP日活用户数DAU
+        meta:
+          ai_context: APP日活用户数DAU
+      - name: m_new_app_dau
+        type: sum
+        sql: "{CUBE}.new_app_dau"
+        title: APP日活新客用户数DAU
+        description: APP日活新客用户数DAU
+        meta:
+          ai_context: APP日活新客用户数DAU
+      - name: m_old_app_dau
+        type: sum
+        sql: "{CUBE}.old_app_dau"
+        title: APP日活老客用户数DAU
+        description: APP日活老客用户数DAU
+        meta:
+          ai_context: APP日活老客用户数DAU
+      - name: m_app_wau
+        type: sum
+        sql: "{CUBE}.app_wau"
+        title: APP周活用户数WAU
+        description: APP周活用户数WAU
+        meta:
+          ai_context: APP周活用户数WAU
+      - name: m_app_mau
+        type: sum
+        sql: "{CUBE}.app_mau"
+        title: APP月活用户数MAU
+        description: APP月活用户数MAU
+        meta:
+          ai_context: APP月活用户数MAU
+      - name: m_moment_dau
+        type: sum
+        sql: "{CUBE}.moment_dau"
+        title: 社区日活用户数DAU
+        description: 社区日活用户数DAU
+        meta:
+          ai_context: 社区日活用户数DAU
+      - name: m_new_moment_dau
+        type: sum
+        sql: "{CUBE}.new_moment_dau"
+        title: 社区日活新客用户数DAU
+        description: 社区日活新客用户数DAU
+        meta:
+          ai_context: 社区日活新客用户数DAU
+      - name: m_old_moment_dau
+        type: sum
+        sql: "{CUBE}.old_moment_dau"
+        title: 社区日活老客用户数DAU
+        description: 社区日活老客用户数DAU
+        meta:
+          ai_context: 社区日活老客用户数DAU
+      - name: m_moment_wau
+        type: sum
+        sql: "{CUBE}.moment_wau"
+        title: 社区周活用户数WAU
+        description: 社区周活用户数WAU
+        meta:
+          ai_context: 社区周活用户数WAU
+      - name: m_moment_mau
+        type: sum
+        sql: "{CUBE}.moment_mau"
+        title: 社区月活用户数MAU
+        description: 社区月活用户数MAU
+        meta:
+          ai_context: 社区月活用户数MAU
+      - name: m_act_user_after1_cn
+        type: sum
+        sql: "{CUBE}.act_user_after1_cn"
+        title: 全量次日留存用户数
+        description: 全量次日留存用户数
+        meta:
+          ai_context: 全量次日留存用户数
+      - name: m_act_user_after7_cn
+        type: sum
+        sql: "{CUBE}.act_user_after7_cn"
+        title: 全量7日留存用户数
+        description: 全量7日留存用户数
+        meta:
+          ai_context: 全量7日留存用户数
+      - name: m_act_user_after30_cn
+        type: sum
+        sql: "{CUBE}.act_user_after30_cn"
+        title: 全量30日留存用户数
+        description: 全量30日留存用户数
+        meta:
+          ai_context: 全量30日留存用户数
+      - name: m_new_act_user_after1_cn
+        type: sum
+        sql: "{CUBE}.new_act_user_after1_cn"
+        title: 新客次日留存用户数
+        description: 新客次日留存用户数
+        meta:
+          ai_context: 新客次日留存用户数
+      - name: m_new_act_user_after7_cn
+        type: sum
+        sql: "{CUBE}.new_act_user_after7_cn"
+        title: 新客7日留存用户数
+        description: 新客7日留存用户数
+        meta:
+          ai_context: 新客7日留存用户数
+      - name: m_new_act_user_after30_cn
+        type: sum
+        sql: "{CUBE}.new_act_user_after30_cn"
+        title: 新客30日留存用户数
+        description: 新客30日留存用户数
+        meta:
+          ai_context: 新客30日留存用户数
+      - name: m_old_act_user_after1_cn
+        type: sum
+        sql: "{CUBE}.old_act_user_after1_cn"
+        title: 老客次日留存用户数
+        description: 老客次日留存用户数
+        meta:
+          ai_context: 老客次日留存用户数
+      - name: m_old_act_user_after7_cn
+        type: sum
+        sql: "{CUBE}.old_act_user_after7_cn"
+        title: 老客7日留存用户数
+        description: 老客7日留存用户数
+        meta:
+          ai_context: 老客7日留存用户数
+      - name: m_old_act_user_after30_cn
+        type: sum
+        sql: "{CUBE}.old_act_user_after30_cn"
+        title: 老客30日留存用户数
+        description: 老客30日留存用户数
+        meta:
+          ai_context: 老客30日留存用户数
+      - name: m_moment_user_after1_cn
+        type: sum
+        sql: "{CUBE}.moment_user_after1_cn"
+        title: 社区用户次日留用户数
+        description: 社区用户次日留用户数
+        meta:
+          ai_context: 社区用户次日留用户数
+      - name: m_moment_user_after7_cn
+        type: sum
+        sql: "{CUBE}.moment_user_after7_cn"
+        title: 社区用户7日留用户数
+        description: 社区用户7日留用户数
+        meta:
+          ai_context: 社区用户7日留用户数
+      - name: m_moment_user_after30_cn
+        type: sum
+        sql: "{CUBE}.moment_user_after30_cn"
+        title: 社区用户30日留用户数
+        description: 社区用户30日留用户数
+        meta:
+          ai_context: 社区用户30日留用户数
+      - name: m_post_user_after1_cn
+        type: sum
+        sql: "{CUBE}.post_user_after1_cn"
+        title: 创作者次日留用户数
+        description: 创作者次日留用户数
+        meta:
+          ai_context: 创作者次日留用户数
+      - name: m_post_user_after7_cn
+        type: sum
+        sql: "{CUBE}.post_user_after7_cn"
+        title: 创作者7日留用户数
+        description: 创作者7日留用户数
+        meta:
+          ai_context: 创作者7日留用户数
+      - name: m_post_user_after30_cn
+        type: sum
+        sql: "{CUBE}.post_user_after30_cn"
+        title: 创作者30日留用户数
+        description: 创作者30日留用户数
+        meta:
+          ai_context: 创作者30日留用户数
+      - name: m_post_user_cn
+        type: sum
+        sql: "{CUBE}.post_user_cn"
+        title: 发帖用户数
+        description: 发帖用户数
+        meta:
+          ai_context: 发帖用户数
+      - name: m_user_device_binding_cn
+        type: sum
+        sql: "{CUBE}.user_device_binding_cn"
+        title: 用户智能设备绑定总数
+        description: 用户智能设备绑定总数
+        meta:
+          ai_context: 用户智能设备绑定总数
+      - name: m_device_binding_user_cn
+        type: sum
+        sql: "{CUBE}.device_binding_user_cn"
+        title: 智能设备绑定总用户数
+        description: 智能设备绑定总用户数
+        meta:
+          ai_context: 智能设备绑定总用户数
+      - name: m_ogc_post_cn
+        type: sum
+        sql: "{CUBE}.ogc_post_cn"
+        title: OGC发帖量
+        description: OGC发帖量
+        meta:
+          ai_context: OGC发帖量
+    joins: []
+

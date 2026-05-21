@@ -1,0 +1,412 @@
+import { streamChat } from '../llm.js'
+import { write } from '../storage.js'
+import {
+  chipsForGap,
+  clarifyingPrompt,
+  classifyGaps,
+  inferTimeRange
+} from './gapClassifier.js'
+import {
+  detectCapabilityGap,
+  loadSemanticAssets,
+  matchDisambiguation,
+  matchExperience,
+  matchMetric,
+  pickView
+} from './semantic.js'
+import type { SseWriter } from './sse.js'
+import type {
+  AnalysisSession,
+  ClientEvent,
+  ExecutionStep,
+  IntentCard
+} from './types.js'
+import { emptySession } from './types.js'
+import { runAnalysisQuery } from '../query/runAnalysisQuery.js'
+import { getQueryEngineInfo } from '../query/queryEngine.js'
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+function pushTurn(session: AnalysisSession, role: 'user' | 'assistant', content: string) {
+  session.turns.push({ role, content })
+}
+
+function buildIntent(
+  userText: string,
+  metricName: string,
+  metricId: string,
+  viewName: string,
+  timeRange: string,
+  defaultNote: string
+): IntentCard {
+  const region = /华东|华北|华南|渠道/.test(userText)
+    ? userText.match(/华东|华北|华南|各渠道|渠道/)?.[0] || ''
+    : ''
+  const summary = [region, timeRange.split(' ~ ')[0] ? '已解析时间' : '', metricName, '趋势分析']
+    .filter(Boolean)
+    .join(' · ')
+    .replace('已解析时间', timeRange.includes('~') ? timeRange : '指定区间')
+
+  return {
+    summary: summary || `${metricName} · ${viewName}`,
+    timeRange,
+    defaultNote,
+    metric: metricName,
+    metricId,
+    view: viewName
+  }
+}
+
+async function streamAssistantText(
+  emit: SseWriter,
+  session: AnalysisSession,
+  text: string
+) {
+  pushTurn(session, 'assistant', '')
+  const idx = session.turns.length - 1
+  for (const ch of text) {
+    session.turns[idx].content += ch
+    await emit({ type: 'token', content: ch })
+    await sleep(8)
+  }
+}
+
+async function maybeLlmClarify(
+  userQuery: string,
+  question: string
+): Promise<string> {
+  if (!process.env.DEEPSEEK_API_KEY) return question
+  try {
+    let out = ''
+    for await (const t of streamChat(
+      [{ role: 'user', content: `用户问题：${userQuery}\n请用一句话追问：${question}` }],
+      '你是数据分析助手。只输出一句简体中文追问，不要多余解释。'
+    )) {
+      out += t
+    }
+    return out.trim() || question
+  } catch {
+    return question
+  }
+}
+
+async function runExecuting(
+  session: AnalysisSession,
+  emit: SseWriter
+) {
+  session.phase = 'executing'
+  session.context.statusLabel = '执行中'
+  await emit({ type: 'session', session: { ...session } })
+
+  const assets = await loadSemanticAssets()
+  const query = session.userQuery + ' ' + session.turns.filter(t => t.role === 'user').map(t => t.content).join(' ')
+  const metric = matchMetric(query, assets.metrics)
+  const view = pickView(metric, assets.views)
+  const dis = matchDisambiguation(query, assets.disambiguations)
+  const expMatch = matchExperience(query, assets.experiences)
+
+  const steps: ExecutionStep[] = [
+    { id: 's1', label: '⏳ 查询中…', status: 'pending' },
+    {
+      id: 's2',
+      label: expMatch
+        ? `命中经验层案例 ${expMatch.exp.id}（相似度 ${expMatch.score}%）`
+        : '未命中经验层案例',
+      status: 'pending',
+      highlight: expMatch ? 'exp_reuse' : undefined
+    },
+    {
+      id: 's3',
+      label: dis
+        ? `应用澄清层 ${dis.id}（${dis.conceptA} vs ${dis.conceptB}）→ ${dis.entityIdA || metric?.id || ''}`
+        : '无需应用澄清层',
+      status: 'pending',
+      highlight: dis ? 'dis_apply' : undefined
+    },
+    { id: 's4', label: `查询 View：${view}`, status: 'pending' },
+    { id: 's5', label: `执行 SQL：${metric?.name || '指标'}`, status: 'pending' }
+  ]
+
+  session.steps = steps
+  session.context.queryEngine = getQueryEngineInfo().engine
+  await emit({ type: 'session', session: { ...session } })
+
+  for (let i = 0; i < steps.length; i++) {
+    if (steps[i].id === 's5') continue
+    steps[i].status = 'running'
+    await emit({ type: 'session', session: { ...session } })
+    await sleep(i === 0 ? 400 : 500)
+    steps[i].status = 'done'
+    if (expMatch && steps[i].id === 's2') {
+      session.context.expHit = `${expMatch.exp.id}（${expMatch.score}%）`
+    }
+    if (dis && steps[i].id === 's3') {
+      session.context.disApplied = `${dis.id} → ${dis.entityIdA || metric?.id}`
+    }
+    if (steps[i].id === 's4') session.context.view = view
+    await emit({ type: 'session', session: { ...session } })
+  }
+
+  const s5 = steps.find(s => s.id === 's5')!
+  s5.status = 'running'
+  await emit({ type: 'session', session: { ...session } })
+
+  const metricForQuery = metric
+    ? { id: session.intent?.metricId || metric.id, name: metric.name, view: metric.view }
+    : { id: session.intent?.metricId || 'MTR-686516', name: '指标', view }
+
+  try {
+    if (!session.intent) throw new Error('缺少意图确认信息')
+    const output = await runAnalysisQuery({
+      metric: metricForQuery,
+      intent: session.intent,
+      userQuery: query,
+      dis: dis ?? undefined
+    })
+    s5.status = 'done'
+    s5.label = `SQL 执行完成（${output.rowCount} 行）`
+    s5.detail = output.sql
+    session.context.metric = metric?.name
+    session.context.executedSql = output.sql
+    session.context.statusLabel = '执行完成'
+    session.context.timeRange = session.intent.timeRange
+    session.phase = 'result'
+    session.result = {
+      summary: output.summary,
+      chartTitle: output.chartTitle,
+      breakdown: output.breakdown,
+      series: output.series,
+      sql: output.sql,
+      rowCount: output.rowCount
+    }
+    pushTurn(session, 'assistant', '分析完成。\n\n' + output.summary)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '查询失败'
+    s5.status = 'error'
+    s5.label = `SQL 执行失败：${msg}`
+    session.context.statusLabel = '查询失败'
+    session.phase = 'result'
+    session.result = {
+      summary: `查询未能完成：${msg}。请检查语义层配置或本地数仓文件。`,
+      chartTitle: '无数据',
+      breakdown: []
+    }
+    pushTurn(session, 'assistant', session.result.summary)
+  }
+
+  await emit({ type: 'session', session: { ...session } })
+}
+
+export async function handleAnalysisEvent(
+  sessionIn: AnalysisSession | null,
+  event: ClientEvent,
+  emit: SseWriter
+) {
+  let session = sessionIn ? { ...sessionIn, turns: [...sessionIn.turns] } : emptySession()
+
+  if (event.type === 'new_conversation') {
+    session = emptySession()
+    await emit({ type: 'session', session })
+    await emit({ type: 'done' })
+    return
+  }
+
+  if (event.type === 'user_message') {
+    const text = event.text.trim()
+    if (!text) return
+
+    if (session.phase === 'result' || session.phase === 'deposition') {
+      session.result = undefined
+      session.steps = undefined
+      session.depositionPrefill = undefined
+    }
+
+    pushTurn(session, 'user', text)
+    if (!session.userQuery) session.userQuery = text
+
+    const assets = await loadSemanticAssets()
+    const cap = detectCapabilityGap(text, assets.metrics)
+    if (cap) {
+      session.phase = 'capability_gap'
+      session.capabilityGap = {
+        missingConcept: cap.concept,
+        alternatives: cap.alternatives,
+        recordedNote: `「${cap.concept}」已记录为待建设需求，会通知数据 PM 跟进。`
+      }
+      session.context.statusLabel = '待建设能力'
+      await streamAssistantText(
+        emit,
+        session,
+        `你想看「${cap.concept}」，但目前系统还没有这个指标。\n\n替代方案：\n${cap.alternatives.map(a => `→ ${a}`).join('\n')}\n\n${session.capabilityGap.recordedNote}`
+      )
+      await emit({ type: 'session', session })
+      await emit({ type: 'done' })
+      return
+    }
+
+    const hasResolvedTime = Boolean(session.intent?.timeRange) || Boolean(inferTimeRange(text))
+    const gap = classifyGaps(text, hasResolvedTime)
+
+    if (gap.gapType === 'A' && session.clarifyRound < 2) {
+      session.phase = 'clarifying'
+      session.gapType = 'A'
+      session.clarifyRound += 1
+      session.chips = chipsForGap(gap.missingAspect)
+      session.context.statusLabel = '澄清中'
+      const q = await maybeLlmClarify(session.userQuery, clarifyingPrompt(gap.missingAspect))
+      await streamAssistantText(emit, session, q)
+      await emit({ type: 'session', session })
+      await emit({ type: 'done' })
+      return
+    }
+
+    const inferred = inferTimeRange(text) || inferTimeRange(session.userQuery)
+    const timeRange = inferred?.timeRange || session.intent?.timeRange || '待指定'
+    const defaultNote = inferred?.defaultNote || session.intent?.defaultNote || '📌 口径：系统默认财务 completed 订单'
+    const metric = matchMetric(text + session.userQuery, assets.metrics)
+    const view = pickView(metric, assets.views)
+
+    session.phase = 'intent_confirm'
+    session.chips = undefined
+    session.intent = buildIntent(
+      text,
+      metric?.name || '业务指标',
+      metric?.id || 'MTR-686516',
+      view,
+      timeRange,
+      defaultNote
+    )
+    session.context = {
+      statusLabel: '待确认意图',
+      metric: metric?.name,
+      view,
+      timeRange
+    }
+    await streamAssistantText(
+      emit,
+      session,
+      '好的，确认方案：\n\n' +
+        `${session.intent.summary}\n` +
+        `时间：${session.intent.timeRange}\n` +
+        `${session.intent.defaultNote}`
+    )
+    await emit({ type: 'session', session })
+    await emit({ type: 'done' })
+    return
+  }
+
+  if (event.type === 'edit_intent') {
+    session.intentEditing = true
+    await emit({ type: 'session', session })
+    await emit({ type: 'done' })
+    return
+  }
+
+  if (event.type === 'update_intent') {
+    session.intent = event.intent
+    session.intentEditing = false
+    session.context.timeRange = event.intent.timeRange
+    session.context.metric = event.intent.metric
+    session.context.view = event.intent.view
+    await emit({ type: 'session', session })
+    await emit({ type: 'done' })
+    return
+  }
+
+  if (event.type === 'confirm_intent') {
+    pushTurn(session, 'user', '✅ 开始分析')
+    await runExecuting(session, emit)
+    await emit({ type: 'done' })
+    return
+  }
+
+  if (event.type === 'capability_continue') {
+    session.phase = 'clarifying'
+    session.capabilityGap = undefined
+    session.clarifyRound = 0
+    const alt = '用替代方案继续分析'
+    pushTurn(session, 'user', alt)
+    await streamAssistantText(emit, session, '好的，我们改用近似指标继续。请补充时间范围或点选快捷项。')
+    session.chips = chipsForGap('time')
+    await emit({ type: 'session', session })
+    await emit({ type: 'done' })
+    return
+  }
+
+  if (event.type === 'capability_new_question') {
+    session = emptySession()
+    await emit({ type: 'session', session })
+    await emit({ type: 'done' })
+    return
+  }
+
+  if (event.type === 'feedback_deep') {
+    session.phase = 'clarifying'
+    session.clarifyRound = 0
+    session.chips = ['按渠道下钻', '按地区下钻', '看同比', '看环比']
+    await streamAssistantText(emit, session, '想从哪个方向深入？')
+    await emit({ type: 'session', session })
+    await emit({ type: 'done' })
+    return
+  }
+
+  if (event.type === 'feedback_reframe') {
+    session.phase = 'intent_confirm'
+    session.result = undefined
+    session.steps = undefined
+    session.context.statusLabel = '待确认意图'
+    await streamAssistantText(emit, session, '已清空结果，请修改意图卡后重新开始分析。')
+    await emit({ type: 'session', session })
+    await emit({ type: 'done' })
+    return
+  }
+
+  if (event.type === 'feedback_ok') {
+    session.phase = 'deposition'
+    session.depositionPrefill = {
+      question: session.userQuery,
+      conclusion: session.result?.summary.split('。')[0] || '',
+      path: {
+        metrics: session.context.metric ? [session.context.metric] : [],
+        views: session.context.view ? [session.context.view] : [],
+        filters: []
+      }
+    }
+    await streamAssistantText(
+      emit,
+      session,
+      '很好！是否把这条路径存入经验层？只需确认一句分析结论。'
+    )
+    await emit({ type: 'session', session })
+    await emit({ type: 'done' })
+    return
+  }
+
+  if (event.type === 'save_experience') {
+    const id = `EXP-${Date.now().toString().slice(-6)}`
+    await write('experiences', id, {
+      id,
+      original_question: session.userQuery,
+      analysis_conclusion: event.conclusion,
+      similar_questions: [],
+      execution_path: session.depositionPrefill?.path || { metrics: [], views: [], filters: [] },
+      source: '分析沉淀',
+      usage_count: 0,
+      created_at: new Date().toISOString().slice(0, 10)
+    })
+    session = emptySession()
+    await emit({ type: 'session', session })
+    await emit({ type: 'done' })
+    return
+  }
+
+  if (event.type === 'skip_experience') {
+    session = emptySession()
+    await emit({ type: 'session', session })
+    await emit({ type: 'done' })
+    return
+  }
+
+  await emit({ type: 'session', session })
+  await emit({ type: 'done' })
+}
