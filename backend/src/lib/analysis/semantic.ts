@@ -226,7 +226,9 @@ ${viewsDesc}
 }`
 
   try {
+    const t0 = Date.now()
     const raw = await chatOnce([{ role: 'user', content: prompt }])
+    console.log(`[llm] chatOnce 完成 ${Date.now() - t0}ms`)
     const json = raw.replace(/^```[a-z]*\n?|\n?```$/g, '').trim()
     const parsed = JSON.parse(json) as Record<string, unknown>
 

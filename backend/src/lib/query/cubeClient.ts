@@ -17,6 +17,10 @@ function authHeaders(): Record<string, string> {
 
 export async function cubeLoad(query: CubeQuery): Promise<CubeLoadResponse> {
   const url = `${getCubeApiUrl()}/v1/load`
+  const measures = query.measures?.join(',') ?? ''
+  const dims = query.dimensions?.join(',') ?? ''
+  console.log(`[cube] load 开始 measures=[${measures}] dimensions=[${dims}]`)
+  const t0 = Date.now()
   const res = await fetch(url, {
     method: 'POST',
     headers: authHeaders(),
@@ -30,17 +34,17 @@ export async function cubeLoad(query: CubeQuery): Promise<CubeLoadResponse> {
   }
 
   if (body.type === 'UserError' && body.error) {
+    console.error(`[cube] load 失败 ${Date.now() - t0}ms: ${body.error}`)
     throw new Error(`Cube 查询失败: ${body.error}`)
   }
 
   if (!res.ok || body.error) {
-    const errMsg =
-      body.error ||
-      body.message ||
-      JSON.stringify(body).slice(0, 400)
+    const errMsg = body.error || body.message || JSON.stringify(body).slice(0, 400)
+    console.error(`[cube] load 失败 ${Date.now() - t0}ms: ${errMsg}`)
     throw new Error(`Cube 查询失败: ${errMsg}`)
   }
 
+  console.log(`[cube] load 完成 ${Date.now() - t0}ms，返回 ${(body.data as unknown[])?.length ?? 0} 行`)
   return body
 }
 

@@ -105,6 +105,8 @@ async function runExecuting(
   session: AnalysisSession,
   emit: SseWriter
 ) {
+  const tExec = Date.now()
+  console.log(`[analysis] 开始执行 query="${session.userQuery.slice(0, 60)}"`)
   session.phase = 'executing'
   session.context.statusLabel = '执行中'
   await emit({ type: 'session', session: { ...session } })
@@ -145,7 +147,6 @@ async function runExecuting(
     if (steps[i].id === 's5') continue
     steps[i].status = 'running'
     await emit({ type: 'session', session: { ...session } })
-    await sleep(i === 0 ? 400 : 500)
     steps[i].status = 'done'
     if (expMatch && steps[i].id === 's2') {
       session.context.expHit = `${expMatch.exp.id}（${expMatch.score}%）`
@@ -169,12 +170,15 @@ async function runExecuting(
 
   try {
     if (!session.intent) throw new Error('缺少意图确认信息')
+    const tq = Date.now()
+    console.log(`[analysis] 执行查询 view=${session.intent.view} queryType=${session.intent.queryType} measure=${session.intent.measureShort}`)
     const output = await runAnalysisQuery({
       metric: metricForQuery,
       intent: session.intent,
       userQuery: query,
       dis: dis ?? undefined
     })
+    console.log(`[analysis] 查询完成 ${Date.now() - tq}ms rowCount=${output.rowCount} chartType=${output.chartType}`)
     s5.status = 'done'
     s5.label = `SQL 执行完成（${output.rowCount} 行）`
     s5.detail = output.sql
@@ -194,6 +198,7 @@ async function runExecuting(
     pushTurn(session, 'assistant', '分析完成。\n\n' + output.summary)
   } catch (err) {
     const msg = err instanceof Error ? err.message : '查询失败'
+    console.error(`[analysis] 查询失败: ${msg}`)
     s5.status = 'error'
     s5.label = `SQL 执行失败：${msg}`
     session.context.statusLabel = '查询失败'
@@ -206,6 +211,7 @@ async function runExecuting(
     pushTurn(session, 'assistant', session.result.summary)
   }
 
+  console.log(`[analysis] 执行完成 总耗时 ${Date.now() - tExec}ms`)
   await emit({ type: 'session', session: { ...session } })
 }
 
@@ -277,7 +283,10 @@ export async function handleAnalysisEvent(
     const defaultNote = inferred?.defaultNote || session.intent?.defaultNote || '📌 口径：系统默认财务 completed 订单'
 
     // 用 LLM 语义匹配 View、指标和拆分维度
+    const t0 = Date.now()
+    console.log(`[analysis] LLM 语义匹配开始 query="${text.slice(0, 60)}"`)
     const llmMatch = await matchViewByLLM(text + ' ' + session.userQuery)
+    console.log(`[analysis] LLM 语义匹配完成 ${Date.now() - t0}ms → view=${llmMatch.viewName} queryType=${llmMatch.queryType} measure=${llmMatch.measureShort} breakdown=${llmMatch.breakdownShort}`)
 
     session.phase = 'intent_confirm'
     session.chips = undefined

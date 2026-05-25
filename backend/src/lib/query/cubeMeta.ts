@@ -19,10 +19,13 @@ function authHeaders(): Record<string, string> {
 /** 从 Cube /v1/meta 构建 view.shortName → view.fullMember */
 export async function loadCubeMetaIndex(): Promise<CubeMetaIndex> {
   if (metaCache && Date.now() - metaCache.fetchedAt < TTL_MS) {
+    console.log('[cube] meta 命中缓存')
     return metaCache.index
   }
 
   const url = `${metaBaseUrl()}/v1/meta`
+  console.log(`[cube] 拉取 meta ${url}`)
+  const t0 = Date.now()
   const res = await fetch(url, { headers: authHeaders() })
   if (!res.ok) {
     const text = await res.text()
@@ -65,6 +68,7 @@ export async function loadCubeMetaIndex(): Promise<CubeMetaIndex> {
 
   const index: CubeMetaIndex = { byViewShort }
   metaCache = { index, fetchedAt: Date.now() }
+  console.log(`[cube] meta 拉取完成 ${Date.now() - t0}ms，共 ${body.cubes?.length ?? 0} 个 cube，${byViewShort.size} 个成员映射`)
   return index
 }
 
