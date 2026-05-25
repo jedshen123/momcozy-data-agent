@@ -1,5 +1,4 @@
-import { buildAnalysisQuerySpec } from './analysisQuerySpec.js'
-import { buildBreakdownQuery, buildTrendQuery } from './cubeQueryBuilder.js'
+import { buildDistributionQuery, buildBreakdownQuery, buildTrendQuery } from './cubeQueryBuilder.js'
 import { cubeLoad, cubeSql } from './cubeClient.js'
 import { formatAnalysisResult } from './formatResult.js'
 import { getViewEntry } from './viewCatalog.js'
@@ -12,6 +11,7 @@ import {
 import type { IntentCard } from '../analysis/types.js'
 import type { DisambiguationRecord, MetricRecord } from '../analysis/types.js'
 import type { AnalysisQueryOutput, QueryPlan, QueryRow } from './types.js'
+import { buildAnalysisQuerySpec } from './analysisQuerySpec.js'
 
 function viewFromMember(member: string): string {
   return member.split('.')[0] || ''
@@ -35,11 +35,13 @@ export async function runCubeAnalysisQuery(params: {
     dis: params.dis
   })
 
+  const queryType = spec.queryType
   let trendRows: QueryRow[] = []
   let breakdownRows: QueryRow[] = []
   const queries: { label: string; query: object }[] = []
 
   if (spec.type === 'composite' && spec.compositeMeasures) {
+    // 复合指标（比率类）：固定走趋势+分布
     const { numerator, denominator } = spec.compositeMeasures
     const numView = viewFromMember(numerator)
     const denView = viewFromMember(denominator)
@@ -59,10 +61,7 @@ export async function runCubeAnalysisQuery(params: {
       numTime,
       denTime
     )
-    trendRows = series.map(s => ({
-      dt: s.date,
-      metric_value: s.value
-    }))
+    trendRows = series.map(s => ({ dt: s.date, metric_value: s.value }))
 
     const breakdownShort = spec.breakdownDimension?.split('.').pop()
     const denViewEntry = await getViewEntry(denView)
@@ -77,29 +76,12 @@ export async function runCubeAnalysisQuery(params: {
     }
 
     if (denBreakDim && numBreakDim) {
-      const denBreakQ = buildBreakdownQuery(
-        { ...spec, timeDimension: denTime, breakdownDimension: denBreakDim },
-        denominator
-      )
-      queries.push({ label: '拆分', query: denBreakQ })
-      const denBreakRes = await cubeLoad(denBreakQ)
-      const numBreakQ = buildBreakdownQuery(
-        { ...spec, timeDimension: numTime, breakdownDimension: numBreakDim },
-        numerator
-      )
-      queries.push({ label: '拆分-分子', query: numBreakQ })
-      const numBreakRes = await cubeLoad(numBreakQ)
-
-      const denMap = rowsToBreakdown(
-        denBreakRes.data as QueryRow[],
-        denominator,
-        denBreakDim
-      )
-      const numMap = rowsToBreakdown(
-        numBreakRes.data as QueryRow[],
-        numerator,
-        numBreakDim
-      )
+      const denBreakQ = buildBreakdownQuery({ ...spec, timeDimension: denTime, breakdownDimension: denBreakDim }, denominator)
+      const numBreakQ = buildBreakdownQuery({ ...spec, timeDimension: numTime, breakdownDimension: numBreakDim }, numerator)
+      queries.push({ label: '拆分', query: denBreakQ }, { label: '拆分-分子', query: numBreakQ })
+      const [denBreakRes, numBreakRes] = await Promise.all([cubeLoad(denBreakQ), cubeLoad(numBreakQ)])
+      const denMap = rowsToBreakdown(denBreakRes.data as QueryRow[], denominator, denBreakDim)
+      const numMap = rowsToBreakdown(numBreakRes.data as QueryRow[], numerator, numBreakDim)
       const denByLabel = new Map(denMap.map(b => [b.label, b.value]))
       breakdownRows = numMap.map(n => ({
         dim_label: n.label,
@@ -108,28 +90,42 @@ export async function runCubeAnalysisQuery(params: {
     }
   } else {
     const measure = spec.primaryMeasure!
-    const trendQ = buildTrendQuery(spec, measure)
-    const breakQ = buildBreakdownQuery(spec, measure)
-    queries.push({ label: '趋势', query: trendQ }, { label: '拆分', query: breakQ })
 
-    const [trendRes, breakRes] = await Promise.all([cubeLoad(trendQ), cubeLoad(breakQ)])
-    trendRows = rowsToMetricSeries(
-      trendRes.data as QueryRow[],
-      measure,
-      spec.timeDimension
-    ).map(s => ({ dt: s.date, metric_value: s.value }))
-
-    if (spec.breakdownDimension) {
-      breakdownRows = rowsToBreakdown(
-        breakRes.data as QueryRow[],
-        measure,
-        spec.breakdownDimension
-      ).map(b => ({ dim_label: b.label, metric_value: b.value }))
+    if (queryType === 'breakdown') {
+      // 纯分布：只执行分布查询
+      const distQ = buildDistributionQuery(spec, measure)
+      queries.push({ label: '分布', query: distQ })
+      const distRes = await cubeLoad(distQ)
+      breakdownRows = spec.breakdownDimension
+        ? rowsToBreakdown(distRes.data as QueryRow[], measure, spec.breakdownDimension)
+            .map(b => ({ dim_label: b.label, metric_value: b.value }))
+        : [{ dim_label: '合计', metric_value: Number((distRes.data as QueryRow[])[0]?.[measure] ?? 0) }]
+      trendRows = [] // 纯分布无趋势
+    } else if (queryType === 'trend') {
+      // 纯趋势：只执行趋势查询，不需要 breakdown
+      const trendQ = buildTrendQuery(spec, measure)
+      queries.push({ label: '趋势', query: trendQ })
+      const trendRes = await cubeLoad(trendQ)
+      trendRows = rowsToMetricSeries(trendRes.data as QueryRow[], measure, spec.timeDimension)
+        .map(s => ({ dt: s.date, metric_value: s.value }))
+      breakdownRows = []
     } else {
-      const v = trendRows.length
-        ? Number(trendRows[trendRows.length - 1].metric_value)
-        : 0
-      breakdownRows = [{ dim_label: '合计', metric_value: v }]
+      // trend_breakdown：趋势 + 分布同时查
+      const trendQ = buildTrendQuery(spec, measure)
+      const breakQ = buildBreakdownQuery(spec, measure)
+      queries.push({ label: '趋势', query: trendQ }, { label: '拆分', query: breakQ })
+
+      const [trendRes, breakRes] = await Promise.all([cubeLoad(trendQ), cubeLoad(breakQ)])
+      trendRows = rowsToMetricSeries(trendRes.data as QueryRow[], measure, spec.timeDimension)
+        .map(s => ({ dt: s.date, metric_value: s.value }))
+
+      if (spec.breakdownDimension) {
+        breakdownRows = rowsToBreakdown(breakRes.data as QueryRow[], measure, spec.breakdownDimension)
+          .map(b => ({ dim_label: b.label, metric_value: b.value }))
+      } else {
+        const v = trendRows.length ? Number(trendRows[trendRows.length - 1].metric_value) : 0
+        breakdownRows = [{ dim_label: '合计', metric_value: v }]
+      }
     }
   }
 
@@ -156,6 +152,7 @@ export async function runCubeAnalysisQuery(params: {
     breakdownDimension: spec.breakdownDimension,
     timeStart: spec.timeStart,
     timeEnd: spec.timeEnd,
+    queryType: spec.queryType,
     cubeQueries: queries.map(q => q.query)
   }
 

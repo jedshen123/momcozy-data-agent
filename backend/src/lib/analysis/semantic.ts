@@ -1,7 +1,7 @@
 import { readAll } from '../storage.js'
 import { chatOnce } from '../llm.js'
 import { loadViewCatalog } from '../query/viewCatalog.js'
-import type { DisambiguationRecord, ExperienceRecord, MetricRecord } from './types.js'
+import type { DisambiguationRecord, ExperienceRecord, MetricRecord, QueryType } from './types.js'
 
 interface RawMetric {
   id?: string
@@ -167,11 +167,12 @@ export interface LLMViewMatch {
   viewName: string
   measureShort: string
   breakdownShort: string | null
+  queryType: QueryType
 }
 
 /**
  * 用 LLM 语义理解用户问题，从 viewCatalog 中选出最合适的 View，
- * 并推断用户想查的指标短名和拆分维度短名。
+ * 并推断用户想查的指标短名、拆分维度短名和查询类型。
  * 重点利用 view 的 ai_context 字段做语义匹配。
  */
 export async function matchViewByLLM(userQuery: string): Promise<LLMViewMatch> {
@@ -181,7 +182,8 @@ export async function matchViewByLLM(userQuery: string): Promise<LLMViewMatch> {
   const fallback: LLMViewMatch = {
     viewName: views[0]?.name || 'app_standard_indicators',
     measureShort: '',
-    breakdownShort: null
+    breakdownShort: null,
+    queryType: 'trend_breakdown'
   }
 
   if (!views.length || !process.env.DEEPSEEK_API_KEY) return fallback
@@ -200,20 +202,26 @@ export async function matchViewByLLM(userQuery: string): Promise<LLMViewMatch> {
     ].filter(Boolean).join('\n  ')
   }).map(s => `- ${s}`).join('\n\n')
 
-  const prompt = `你是数据仓库查询助手。根据用户问题，从下方可用 Views 中选出最合适的一个，并推断查询所需的指标和拆分维度。
+  const prompt = `你是数据仓库查询助手。根据用户问题，从下方可用 Views 中选出最合适的一个，推断查询所需的指标、拆分维度和查询类型。
 
 用户问题：${userQuery}
 
 可用 Views：
 ${viewsDesc}
 
+查询类型定义：
+- "trend"：用户问趋势、走势、变化、近N天/月，需要按时间粒度（天）聚合的折线数据
+- "breakdown"：用户问分布、各个X的Y、按X分组，只需要按维度聚合，不需要时间序列
+- "trend_breakdown"：用户同时关心趋势和分布（默认）
+
 选择依据：优先参考每个 View 的 ai_context 字段来判断语义匹配程度；includes 字段列出了 View 可用的成员名，用于推断 measureShort 和 breakdownShort。
 
 请只输出如下 JSON，不要 markdown 代码块，不要多余文字：
 {
   "viewName": "选中的 view name（必须是上方列表中的 name 之一）",
-  "measureShort": "用户想查的指标短名（从 includes 中选，或根据语义推断，如 bound_user_cnt、user_cnt、dau、count）",
-  "breakdownShort": "拆分维度短名（从 includes 中选，如 device_type、data_source、country；无拆分需求则填 null）"
+  "queryType": "trend | breakdown | trend_breakdown",
+  "measureShort": "用户想查的指标短名（从 includes 中选，如 bound_user_cnt、user_cnt、dau）",
+  "breakdownShort": "拆分维度短名（从 includes 中选，如 device_type、data_source；queryType为trend时填null；无拆分需求也填null）"
 }`
 
   try {
@@ -231,7 +239,12 @@ ${viewsDesc}
       ? null
       : typeof parsed.breakdownShort === 'string' ? parsed.breakdownShort : null
 
-    return { viewName, measureShort, breakdownShort }
+    const validQueryTypes: QueryType[] = ['trend', 'breakdown', 'trend_breakdown']
+    const queryType: QueryType = validQueryTypes.includes(parsed.queryType as QueryType)
+      ? (parsed.queryType as QueryType)
+      : 'trend_breakdown'
+
+    return { viewName, measureShort, breakdownShort, queryType }
   } catch {
     return fallback
   }

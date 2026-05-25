@@ -18,7 +18,8 @@ import type {
   AnalysisSession,
   ClientEvent,
   ExecutionStep,
-  IntentCard
+  IntentCard,
+  QueryType
 } from './types.js'
 import { emptySession } from './types.js'
 import { runAnalysisQuery } from '../query/runAnalysisQuery.js'
@@ -38,7 +39,8 @@ function buildIntent(
   timeRange: string,
   defaultNote: string,
   measureShort?: string,
-  breakdownShort?: string | null
+  breakdownShort?: string | null,
+  queryType?: QueryType
 ): IntentCard {
   const region = /华东|华北|华南|渠道/.test(userText)
     ? userText.match(/华东|华北|华南|各渠道|渠道/)?.[0] || ''
@@ -56,7 +58,8 @@ function buildIntent(
     metricId,
     view: viewName,
     measureShort,
-    breakdownShort
+    breakdownShort,
+    queryType
   }
 }
 
@@ -281,7 +284,8 @@ export async function handleAnalysisEvent(
       timeRange,
       defaultNote,
       llmMatch.measureShort || undefined,
-      llmMatch.breakdownShort
+      llmMatch.breakdownShort,
+      llmMatch.queryType
     )
     session.context = {
       statusLabel: '待确认意图',

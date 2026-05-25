@@ -1,4 +1,4 @@
-import type { IntentCard } from '../analysis/types.js'
+import type { IntentCard, QueryType } from '../analysis/types.js'
 import type { DisambiguationRecord } from '../analysis/types.js'
 import { getMetricById, type MetricDef } from './semanticCatalog.js'
 import { getViewEntry } from './viewCatalog.js'
@@ -11,6 +11,7 @@ export interface AnalysisQuerySpec {
   metricName: string
   type: 'simple' | 'composite' | string
   viewName: string
+  queryType: QueryType
   /** 简单指标：单个 measure 全名 */
   primaryMeasure?: string
   /** 复合指标：分子、分母 measure 全名（可跨 View） */
@@ -78,6 +79,10 @@ export async function buildAnalysisQuerySpec(params: {
 
   const filters = await buildFilters(viewName, params.userQuery, metric)
 
+  // queryType：intent 优先（LLM 已识别），否则按是否有拆分维度推断
+  const queryType: QueryType = params.intent.queryType
+    ?? (breakdownDimension && !params.intent.queryType ? 'breakdown' : 'trend_breakdown')
+
   // 复合指标
   if (metric?.type === 'composite' && metric.measureMap) {
     const m1Ref = metric.measureMap.m1 || ''
@@ -89,6 +94,7 @@ export async function buildAnalysisQuerySpec(params: {
       metricName: metric.name,
       type: 'composite',
       viewName,
+      queryType,
       compositeMeasures: { numerator, denominator },
       timeDimension,
       breakdownDimension,
@@ -107,6 +113,7 @@ export async function buildAnalysisQuerySpec(params: {
     metricName: metric?.name || params.intent.metric || measureShort,
     type: metric?.type || 'simple',
     viewName,
+    queryType,
     primaryMeasure,
     timeDimension,
     breakdownDimension,

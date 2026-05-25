@@ -35,10 +35,13 @@ export interface CapabilityGapPayload {
   recordedNote: string
 }
 
+export type ChartType = 'line' | 'bar' | 'bar_vertical'
+
 export interface ResultPayload {
   summary: string
   chartTitle: string
-  breakdown: Array<{ label: string; value: string; width: string }>
+  chartType?: ChartType
+  breakdown: Array<{ label: string; value: string; width: string; raw?: number }>
   series?: Array<{ date: string; value: number }>
   sql?: string
   rowCount?: number

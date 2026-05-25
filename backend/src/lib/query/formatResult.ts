@@ -10,6 +10,12 @@ function fmtRatio(n: number) {
   return n.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
 }
 
+function fmt(plan: QueryPlan, n: number) {
+  return plan.metricName.includes('客单价') || plan.metricName.includes('率')
+    ? fmtRatio(n)
+    : fmtNum(n)
+}
+
 export function formatAnalysisResult(params: {
   plan: QueryPlan
   trendRows: QueryRow[]
@@ -18,44 +24,77 @@ export function formatAnalysisResult(params: {
   region?: string | null
 }): AnalysisQueryOutput {
   const { plan, trendRows, breakdownRows, userQuery } = params
-  const region = params.region || (/华东|华北|华南/.exec(userQuery)?.[0] ?? '全区域')
+  const region = params.region || (/华东|华北|华南/.exec(userQuery)?.[0] ?? null)
+  const queryType = plan.queryType ?? 'trend_breakdown'
 
+  // 趋势 series
   const series = trendRows
     .map(r => ({
-      date: String(r.dt ?? r.busi_date ?? ''),
+      date: String(r.dt ?? r.busi_date ?? '').slice(0, 10),
       value: Number(r.metric_value ?? 0)
     }))
     .filter(s => s.date)
 
-  const totalTrend = series.reduce((a, b) => a + b.value, 0)
-  const avgDaily = series.length ? totalTrend / series.length : 0
-
+  // 分布 breakdown
   const breakdownRaw = breakdownRows.map(r => ({
     label: String(r.dim_label ?? r.data_source ?? '未知'),
     value: Number(r.metric_value ?? 0)
   }))
   const totalBreak = breakdownRaw.reduce((a, b) => a + b.value, 0) || 1
 
-  const breakdown = breakdownRaw.slice(0, 6).map(b => ({
+  const breakdown = breakdownRaw.slice(0, 10).map(b => ({
     label: b.label,
-    value: plan.metricName.includes('客单价') ? fmtRatio(b.value) : fmtNum(b.value),
-    width: `${Math.max(8, Math.round((b.value / totalBreak) * 100))}%`
+    value: fmt(plan, b.value),
+    raw: b.value,
+    width: `${Math.max(4, Math.round((b.value / totalBreak) * 100))}%`
   }))
 
+  // 图表类型
+  let chartType: AnalysisQueryOutput['chartType']
+  if (queryType === 'breakdown') {
+    chartType = 'bar'
+  } else if (queryType === 'trend') {
+    chartType = 'line'
+  } else {
+    // trend_breakdown：有趋势数据用折线，无趋势只有分布用横向柱状
+    chartType = series.length > 0 ? 'line' : 'bar'
+  }
+
+  // 摘要
+  const timeLabel = `${plan.timeStart} ~ ${plan.timeEnd}`
+  const regionLabel = region ? `${region}` : ''
   const top = breakdownRaw[0]
-  const summaryParts = [
-    `${region}在 ${plan.timeStart} ~ ${plan.timeEnd} 的${plan.metricName}`,
-    series.length
-      ? `日均约 ${plan.metricName.includes('客单价') ? fmtRatio(avgDaily) : fmtNum(avgDaily)}`
-      : '已完成聚合',
-    top ? `${top.label} 贡献最高（约 ${Math.round((top.value / totalBreak) * 100)}%）` : ''
-  ].filter(Boolean)
+  const avgDaily = series.length ? series.reduce((a, b) => a + b.value, 0) / series.length : 0
+
+  const summaryParts: string[] = []
+  if (queryType === 'breakdown' || queryType === 'trend_breakdown') {
+    if (top) {
+      summaryParts.push(
+        `${regionLabel}在 ${timeLabel}，${top.label} 的${plan.metricName}最高（${fmt(plan, top.value)}，占比 ${Math.round((top.value / totalBreak) * 100)}%）`
+      )
+    }
+    if (breakdownRaw.length > 1) {
+      summaryParts.push(`共 ${breakdownRaw.length} 个分组`)
+    }
+  }
+  if (queryType === 'trend' || (queryType === 'trend_breakdown' && series.length > 0)) {
+    if (series.length > 0) {
+      summaryParts.push(
+        `${regionLabel}${plan.metricName}在 ${timeLabel} 日均约 ${fmt(plan, avgDaily)}，共 ${series.length} 天数据`
+      )
+    }
+  }
+
+  const chartTitle = queryType === 'breakdown'
+    ? `${plan.metricName} 分布（${timeLabel}）`
+    : `${plan.metricName} 趋势${plan.breakdownDimension ? ' & 分布' : ''}（${timeLabel}）`
 
   return {
-    summary: summaryParts.join('，') + '。',
-    chartTitle: `${plan.metricName}趋势（${plan.timeStart} ~ ${plan.timeEnd}）`,
+    summary: summaryParts.join('；') + '。',
+    chartTitle,
+    chartType,
     breakdown,
-    series,
+    series: series.length > 0 ? series : undefined,
     sql: plan.displaySql,
     rowCount: trendRows.length + breakdownRows.length
   }

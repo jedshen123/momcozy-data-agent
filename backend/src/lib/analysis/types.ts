@@ -14,6 +14,9 @@ export interface TurnMessage {
   content: string
 }
 
+/** 查询类型：趋势 / 分布 / 趋势+分布 */
+export type QueryType = 'trend' | 'breakdown' | 'trend_breakdown'
+
 export interface IntentCard {
   summary: string
   timeRange: string
@@ -25,6 +28,8 @@ export interface IntentCard {
   measureShort?: string
   /** LLM 语义匹配给出的拆分维度短名，null 表示无需拆分 */
   breakdownShort?: string | null
+  /** LLM 识别的查询类型 */
+  queryType?: QueryType
 }
 
 export interface ExecutionStep {

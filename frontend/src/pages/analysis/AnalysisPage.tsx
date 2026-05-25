@@ -1,4 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
+import {
+  LineChart, Line, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList
+} from 'recharts'
 import type { AnalysisSession, ClientEvent, IntentCard } from '../../types/analysis'
 import { emptySession } from '../../types/analysis'
 import { dispatchAnalysisEvent } from './analysisApi'
@@ -341,44 +345,136 @@ function ResultBlock({
   onDeep: () => void
   onReframe: () => void
 }) {
-  const maxVal = Math.max(...(result.series?.map(s => s.value) ?? [1]), 1)
+  const chartType = result.chartType ?? (result.series && result.series.length > 0 ? 'line' : 'bar')
+  const COLORS = ['#2563eb', '#7c3aed', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed', '#be185d', '#0284c7', '#16a34a']
+
+  const formatDate = (d: string) => d.slice(5) // "MM-DD"
+  const formatVal = (v: number) => v >= 10000 ? `${(v / 10000).toFixed(1)}万` : v.toLocaleString('zh-CN')
+
+  const breakdownData = result.breakdown.map(b => ({
+    label: b.label,
+    value: b.raw ?? (Number(b.value.replace(/[万,]/g, '')) || 0),
+    display: b.value
+  }))
+  const totalBreak = breakdownData.reduce((s, b) => s + b.value, 0) || 1
 
   return (
-    <div style={{ margin: '1rem 0', padding: '1rem', border: '1px solid #e5e7eb', borderRadius: '0.75rem' }}>
-      <div style={{ fontSize: '0.8125rem', color: '#6b7280', marginBottom: '0.5rem' }}>{result.chartTitle}</div>
-      {result.series && result.series.length > 0 ? (
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '100px', marginBottom: '1rem', padding: '0 0.25rem' }}>
-          {result.series.map(s => (
-            <div
-              key={s.date}
-              title={`${s.date}: ${s.value}`}
-              style={{
-                flex: 1,
-                minWidth: '4px',
-                height: `${Math.max(4, (s.value / maxVal) * 100)}%`,
-                background: '#2563eb',
-                borderRadius: '2px 2px 0 0'
-              }}
-            />
-          ))}
-        </div>
-      ) : (
-        <div style={{ height: '80px', background: '#f3f4f6', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: '0.8125rem', marginBottom: '1rem' }}>
-          暂无趋势数据
+    <div style={{ margin: '1rem 0', padding: '1.25rem', border: '1px solid #e5e7eb', borderRadius: '0.875rem', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+      <div style={{ fontSize: '0.8125rem', color: '#6b7280', marginBottom: '0.25rem' }}>{result.chartTitle}</div>
+      <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginBottom: '1rem' }}>
+        {result.rowCount != null ? `${result.rowCount} 行数据` : ''}
+      </div>
+
+      {/* 趋势折线图 */}
+      {(chartType === 'line') && result.series && result.series.length > 0 && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={result.series} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+              <XAxis
+                dataKey="date"
+                tickFormatter={formatDate}
+                tick={{ fontSize: 11, fill: '#9ca3af' }}
+                axisLine={false}
+                tickLine={false}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                tickFormatter={formatVal}
+                tick={{ fontSize: 11, fill: '#9ca3af' }}
+                axisLine={false}
+                tickLine={false}
+                width={56}
+              />
+              <Tooltip
+                formatter={(v: unknown) => [formatVal(Number(v)), result.chartTitle.split('（')[0]]}
+                labelFormatter={(l: unknown) => String(l)}
+                contentStyle={{ fontSize: '0.8125rem', borderRadius: '0.5rem', border: '1px solid #e5e7eb' }}
+              />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke="#2563eb"
+                strokeWidth={2}
+                dot={result.series.length <= 30 ? { r: 3, fill: '#2563eb' } : false}
+                activeDot={{ r: 5 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       )}
-      {result.breakdown.map(row => (
-        <div key={row.label} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem', marginBottom: '0.35rem' }}>
-          <span style={{ width: '3rem' }}>{row.label}</span>
-          <div style={{ flex: 1, height: '8px', background: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' }}>
-            <div style={{ width: row.width, height: '100%', background: '#2563eb' }} />
-          </div>
-          <span>{row.value}</span>
+
+      {/* 分布横向柱状图（bar）或无趋势时的竖向柱状图 */}
+      {(chartType === 'bar' || chartType === 'bar_vertical') && breakdownData.length > 0 && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <ResponsiveContainer width="100%" height={Math.max(180, breakdownData.length * 36)}>
+            <BarChart
+              layout="vertical"
+              data={breakdownData}
+              margin={{ top: 4, right: 60, bottom: 4, left: 4 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f3f4f6" />
+              <XAxis
+                type="number"
+                tickFormatter={formatVal}
+                tick={{ fontSize: 11, fill: '#9ca3af' }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                type="category"
+                dataKey="label"
+                width={90}
+                tick={{ fontSize: 11, fill: '#374151' }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip
+                formatter={(v: unknown) => [formatVal(Number(v)), '数值']}
+                contentStyle={{ fontSize: '0.8125rem', borderRadius: '0.5rem', border: '1px solid #e5e7eb' }}
+              />
+              <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={28}>
+                {breakdownData.map((_, i) => (
+                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                ))}
+                <LabelList
+                  dataKey="value"
+                  position="right"
+                  formatter={(v: unknown) => formatVal(Number(v))}
+                  style={{ fontSize: '11px', fill: '#6b7280' }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
-      ))}
-      <p style={{ marginTop: '1rem', fontSize: '0.875rem' }}>结果符合预期吗？</p>
-      <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
-        <button type="button" style={btn()} disabled={busy} onClick={onOk}>✅ 符合</button>
+      )}
+
+      {/* 趋势+分布：趋势折线下方显示分布详情 */}
+      {chartType === 'line' && breakdownData.length > 1 && (
+        <div style={{ marginBottom: '1rem' }}>
+          <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginBottom: '0.5rem' }}>分布详情</div>
+          {breakdownData.slice(0, 8).map((b, i) => (
+            <div key={b.label} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem', marginBottom: '0.4rem' }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: COLORS[i % COLORS.length], flexShrink: 0 }} />
+              <span style={{ minWidth: '5rem', maxWidth: '8rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#374151' }}>{b.label}</span>
+              <div style={{ flex: 1, height: '6px', background: '#f3f4f6', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ width: `${Math.round((b.value / totalBreak) * 100)}%`, height: '100%', background: COLORS[i % COLORS.length], borderRadius: '3px' }} />
+              </div>
+              <span style={{ color: '#6b7280', minWidth: '3rem', textAlign: 'right' }}>{b.display}</span>
+              <span style={{ color: '#9ca3af', minWidth: '2.5rem', textAlign: 'right' }}>{Math.round((b.value / totalBreak) * 100)}%</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 摘要 */}
+      <p style={{ fontSize: '0.875rem', color: '#374151', lineHeight: 1.6, marginBottom: '1rem', padding: '0.75rem', background: '#f9fafb', borderRadius: '0.5rem' }}>
+        {result.summary}
+      </p>
+
+      <p style={{ fontSize: '0.8125rem', color: '#6b7280', marginBottom: '0.75rem' }}>结果符合预期吗？</p>
+      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <button type="button" style={btn(true)} disabled={busy} onClick={onOk}>✅ 符合</button>
         <button type="button" style={btn()} disabled={busy} onClick={onDeep}>🔄 深入分析</button>
         <button type="button" style={btn()} disabled={busy} onClick={onReframe}>✏ 换个角度</button>
       </div>
