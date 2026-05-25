@@ -51,41 +51,45 @@ export function formatAnalysisResult(params: {
 
   // 图表类型
   let chartType: AnalysisQueryOutput['chartType']
-  if (queryType === 'breakdown') {
+  if (queryType === 'scalar') {
+    chartType = 'scalar'
+  } else if (queryType === 'breakdown') {
     chartType = 'bar'
   } else if (queryType === 'trend') {
     chartType = 'line'
   } else {
-    // trend_breakdown：有趋势数据用折线，无趋势只有分布用横向柱状
     chartType = series.length > 0 ? 'line' : 'bar'
   }
 
-  // 摘要
   const timeLabel = `${plan.timeStart} ~ ${plan.timeEnd}`
   const regionLabel = region ? `${region}` : ''
   const top = breakdownRaw[0]
   const avgDaily = series.length ? series.reduce((a, b) => a + b.value, 0) / series.length : 0
 
+  // 摘要
   const summaryParts: string[] = []
-  if (queryType === 'breakdown' || queryType === 'trend_breakdown') {
+  if (queryType === 'scalar') {
+    const val = breakdownRaw[0]?.value ?? 0
+    summaryParts.push(
+      `${regionLabel}在 ${timeLabel}，${plan.metricName}共 ${fmt(plan, val)}`
+    )
+  } else if (queryType === 'breakdown' || queryType === 'trend_breakdown') {
     if (top) {
       summaryParts.push(
         `${regionLabel}在 ${timeLabel}，${top.label} 的${plan.metricName}最高（${fmt(plan, top.value)}，占比 ${Math.round((top.value / totalBreak) * 100)}%）`
       )
     }
-    if (breakdownRaw.length > 1) {
-      summaryParts.push(`共 ${breakdownRaw.length} 个分组`)
-    }
+    if (breakdownRaw.length > 1) summaryParts.push(`共 ${breakdownRaw.length} 个分组`)
   }
   if (queryType === 'trend' || (queryType === 'trend_breakdown' && series.length > 0)) {
-    if (series.length > 0) {
-      summaryParts.push(
-        `${regionLabel}${plan.metricName}在 ${timeLabel} 日均约 ${fmt(plan, avgDaily)}，共 ${series.length} 天数据`
-      )
-    }
+    summaryParts.push(
+      `${regionLabel}${plan.metricName}在 ${timeLabel} 日均约 ${fmt(plan, avgDaily)}，共 ${series.length} 天数据`
+    )
   }
 
-  const chartTitle = queryType === 'breakdown'
+  const chartTitle = queryType === 'scalar'
+    ? `${plan.metricName} 汇总（${timeLabel}）`
+    : queryType === 'breakdown'
     ? `${plan.metricName} 分布（${timeLabel}）`
     : `${plan.metricName} 趋势${plan.breakdownDimension ? ' & 分布' : ''}（${timeLabel}）`
 

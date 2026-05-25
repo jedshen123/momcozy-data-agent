@@ -45,7 +45,8 @@ function buildIntent(
   const region = /华东|华北|华南|渠道/.test(userText)
     ? userText.match(/华东|华北|华南|各渠道|渠道/)?.[0] || ''
     : ''
-  const analysisLabel = queryType === 'breakdown' ? '分布分析'
+  const analysisLabel = queryType === 'scalar' ? '指标查询'
+    : queryType === 'breakdown' ? '分布分析'
     : queryType === 'trend' ? '趋势分析'
     : queryType === 'trend_breakdown' ? '趋势 & 分布分析'
     : '数据分析'

@@ -1,4 +1,4 @@
-import { buildDistributionQuery, buildBreakdownQuery, buildTrendQuery } from './cubeQueryBuilder.js'
+import { buildScalarQuery, buildDistributionQuery, buildBreakdownQuery, buildTrendQuery } from './cubeQueryBuilder.js'
 import { cubeLoad, cubeSql } from './cubeClient.js'
 import { formatAnalysisResult } from './formatResult.js'
 import { getViewEntry } from './viewCatalog.js'
@@ -91,7 +91,16 @@ export async function runCubeAnalysisQuery(params: {
   } else {
     const measure = spec.primaryMeasure!
 
-    if (queryType === 'breakdown') {
+    if (queryType === 'scalar') {
+      // 单值聚合：只查一个汇总数
+      const scalarQ = buildScalarQuery(spec, measure)
+      queries.push({ label: '单值聚合', query: scalarQ })
+      const scalarRes = await cubeLoad(scalarQ)
+      const row = (scalarRes.data as QueryRow[])[0]
+      const val = row ? Number(row[measure] ?? 0) : 0
+      breakdownRows = [{ dim_label: '合计', metric_value: val }]
+      trendRows = []
+    } else if (queryType === 'breakdown') {
       // 纯分布：只执行分布查询
       const distQ = buildDistributionQuery(spec, measure)
       queries.push({ label: '分布', query: distQ })

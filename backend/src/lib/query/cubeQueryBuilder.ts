@@ -2,6 +2,24 @@ import type { AnalysisQuerySpec } from './analysisQuerySpec.js'
 import type { CubeQuery } from './cubeTypes.js'
 
 /**
+ * 单值聚合查询（queryType === 'scalar'）：
+ * 整个时间范围内汇总一个数，不按时间粒度展开，不按维度拆分
+ */
+export function buildScalarQuery(spec: AnalysisQuerySpec, measure: string): CubeQuery {
+  return {
+    measures: [measure],
+    timeDimensions: [
+      {
+        dimension: spec.timeDimension,
+        dateRange: [spec.timeStart, spec.timeEnd]
+      }
+    ],
+    filters: spec.filters,
+    limit: 1
+  }
+}
+
+/**
  * 趋势查询：按天聚合时间序列，不需要 breakdown 维度
  */
 export function buildTrendQuery(spec: AnalysisQuerySpec, measure: string): CubeQuery {

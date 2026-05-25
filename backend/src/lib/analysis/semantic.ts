@@ -210,6 +210,7 @@ export async function matchViewByLLM(userQuery: string): Promise<LLMViewMatch> {
 ${viewsDesc}
 
 查询类型定义：
+- "scalar"：用户问总量/合计/是多少，只需返回一个汇总数值，不需要时间序列也不需要维度拆分
 - "trend"：用户问趋势、走势、变化、近N天/月，需要按时间粒度（天）聚合的折线数据
 - "breakdown"：用户问分布、各个X的Y、按X分组，只需要按维度聚合，不需要时间序列
 - "trend_breakdown"：用户同时关心趋势和分布（默认）
@@ -219,9 +220,9 @@ ${viewsDesc}
 请只输出如下 JSON，不要 markdown 代码块，不要多余文字：
 {
   "viewName": "选中的 view name（必须是上方列表中的 name 之一）",
-  "queryType": "trend | breakdown | trend_breakdown",
+  "queryType": "scalar | trend | breakdown | trend_breakdown",
   "measureShort": "用户想查的指标短名（从 includes 中选，如 bound_user_cnt、user_cnt、dau）",
-  "breakdownShort": "拆分维度短名（从 includes 中选，如 device_type、data_source；queryType为trend时填null；无拆分需求也填null）"
+  "breakdownShort": "拆分维度短名（从 includes 中选，如 device_type、data_source；queryType为trend/scalar时填null；无拆分需求也填null）"
 }`
 
   try {
@@ -239,7 +240,7 @@ ${viewsDesc}
       ? null
       : typeof parsed.breakdownShort === 'string' ? parsed.breakdownShort : null
 
-    const validQueryTypes: QueryType[] = ['trend', 'breakdown', 'trend_breakdown']
+    const validQueryTypes: QueryType[] = ['trend', 'breakdown', 'trend_breakdown', 'scalar']
     const queryType: QueryType = validQueryTypes.includes(parsed.queryType as QueryType)
       ? (parsed.queryType as QueryType)
       : 'trend_breakdown'

@@ -33,8 +33,8 @@ export interface QueryResult {
 export interface AnalysisQueryOutput {
   summary: string
   chartTitle: string
-  /** 图表类型：line=折线趋势，bar=横向柱状分布，bar_vertical=竖向柱状趋势 */
-  chartType: 'line' | 'bar' | 'bar_vertical'
+  /** 图表类型：line=折线趋势，bar=横向柱状分布，bar_vertical=竖向柱状趋势，scalar=单值卡片 */
+  chartType: 'line' | 'bar' | 'bar_vertical' | 'scalar'
   breakdown: Array<{ label: string; value: string; width: string; raw: number }>
   series?: Array<{ date: string; value: number }>
   sql: string

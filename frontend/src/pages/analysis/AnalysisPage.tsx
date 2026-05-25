@@ -114,7 +114,7 @@ export default function AnalysisPage() {
               <p style={{ color: '#6b7280', marginBottom: '2rem' }}>告诉我你想分析什么，我来帮你找答案</p>
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
                 {examples.map(ex => (
-                  <button key={ex} type="button" onClick={() => setInput(ex)} style={chipStyle}>
+                  <button key={ex} type="button" onClick={() => sendText(ex)} style={chipStyle}>
                     {ex}
                   </button>
                 ))}
@@ -363,6 +363,18 @@ function ResultBlock({
       <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginBottom: '1rem' }}>
         {result.rowCount != null ? `${result.rowCount} 行数据` : ''}
       </div>
+
+      {/* 单值卡片 */}
+      {chartType === 'scalar' && breakdownData.length > 0 && (
+        <div style={{ marginBottom: '1.5rem', textAlign: 'center', padding: '1.5rem 0' }}>
+          <div style={{ fontSize: '3rem', fontWeight: 700, color: '#2563eb', lineHeight: 1 }}>
+            {breakdownData[0].display}
+          </div>
+          <div style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>
+            {result.chartTitle.split('（')[0]}
+          </div>
+        </div>
+      )}
 
       {/* 趋势折线图 */}
       {(chartType === 'line') && result.series && result.series.length > 0 && (

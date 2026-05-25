@@ -14,8 +14,8 @@ export interface TurnMessage {
   content: string
 }
 
-/** 查询类型：趋势 / 分布 / 趋势+分布 */
-export type QueryType = 'trend' | 'breakdown' | 'trend_breakdown'
+/** 查询类型：趋势 / 分布 / 趋势+分布 / 单值聚合 */
+export type QueryType = 'trend' | 'breakdown' | 'trend_breakdown' | 'scalar'
 
 export interface IntentCard {
   summary: string
