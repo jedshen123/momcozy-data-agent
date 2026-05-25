@@ -95,5 +95,5 @@ export function clarifyingPrompt(missing: TimeInference['missingAspect']): strin
   if (missing === 'metric') {
     return '你想重点看哪类指标？可选下方快捷项，或直接说明。'
   }
-  return '「最近」是指哪个时间段？请选一个快捷项或补充说明。'
+  return '请问你想查哪个时间段的数据？可选下方快捷项或直接说明。'
 }
