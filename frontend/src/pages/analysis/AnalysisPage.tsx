@@ -8,10 +8,9 @@ import { emptySession } from '../../types/analysis'
 import { dispatchAnalysisEvent } from './analysisApi'
 
 const examples = [
-  '上个月各渠道的销售额是多少？',
-  '最近 30 天活跃用户数趋势',
-  '本季度 GMV vs 去年同期对比',
-  '退款率是多少？',
+  '查询APP总用户数是多少',
+  '绑定各个设备的用户数分布',
+  '最近15天绑定M9的社区活跃用户数趋势',
 ]
 
 const btn = (primary?: boolean): React.CSSProperties => ({
