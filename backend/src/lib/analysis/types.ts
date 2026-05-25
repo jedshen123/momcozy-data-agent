@@ -79,6 +79,8 @@ export interface DepositionPrefill {
 export interface AnalysisSession {
   phase: AnalysisPhase
   turns: TurnMessage[]
+  /** AI 正在思考中（LLM 调用期间） */
+  thinking?: boolean
   chips?: string[]
   gapType?: GapType
   intent?: IntentCard

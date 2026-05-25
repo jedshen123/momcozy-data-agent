@@ -242,9 +242,14 @@ export async function handleAnalysisEvent(
     pushTurn(session, 'user', text)
     if (!session.userQuery) session.userQuery = text
 
+    // 立刻把用户消息推到前端，然后显示思考状态
+    session.thinking = true
+    await emit({ type: 'session', session: { ...session } })
+
     const assets = await loadSemanticAssets()
     const cap = detectCapabilityGap(text, assets.metrics)
     if (cap) {
+      session.thinking = false
       session.phase = 'capability_gap'
       session.capabilityGap = {
         missingConcept: cap.concept,
@@ -266,6 +271,7 @@ export async function handleAnalysisEvent(
     const gap = classifyGaps(text, hasResolvedTime)
 
     if (gap.gapType === 'A' && session.clarifyRound < 2) {
+      session.thinking = false
       session.phase = 'clarifying'
       session.gapType = 'A'
       session.clarifyRound += 1
@@ -288,6 +294,7 @@ export async function handleAnalysisEvent(
     const llmMatch = await matchViewByLLM(text + ' ' + session.userQuery)
     console.log(`[analysis] LLM 语义匹配完成 ${Date.now() - t0}ms → view=${llmMatch.viewName} queryType=${llmMatch.queryType} measure=${llmMatch.measureShort} breakdown=${llmMatch.breakdownShort}`)
 
+    session.thinking = false
     session.phase = 'intent_confirm'
     session.chips = undefined
     session.intent = buildIntent(

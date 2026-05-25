@@ -43,7 +43,7 @@ export default function AnalysisPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [session.turns, session.phase, session.steps])
+  }, [session.turns, session.phase, session.steps, session.thinking])
 
   useEffect(() => {
     if (session.depositionPrefill) {
@@ -131,21 +131,40 @@ export default function AnalysisPage() {
                 justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start'
               }}
             >
+              {msg.role === 'assistant' && (
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '0.5rem', flexShrink: 0, alignSelf: 'flex-end' }}>
+                  <span style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 700 }}>AI</span>
+                </div>
+              )}
               <div
                 style={{
-                  maxWidth: '70%',
+                  maxWidth: '72%',
                   padding: '0.75rem 1rem',
-                  borderRadius: '0.75rem',
+                  borderRadius: msg.role === 'user' ? '1rem 1rem 0.25rem 1rem' : '1rem 1rem 1rem 0.25rem',
                   backgroundColor: msg.role === 'user' ? '#2563eb' : '#f3f4f6',
                   color: msg.role === 'user' ? '#fff' : '#111827',
                   whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word'
+                  wordBreak: 'break-word',
+                  fontSize: '0.875rem',
+                  lineHeight: 1.6
                 }}
               >
                 {msg.content || (busy && i === session.turns.length - 1 && msg.role === 'assistant' ? '▌' : '')}
               </div>
             </div>
           ))}
+
+          {/* AI 思考中动画 */}
+          {session.thinking && (
+            <div style={{ display: 'flex', alignItems: 'flex-end', marginBottom: '1rem', gap: '0.5rem' }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <span style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 700 }}>AI</span>
+              </div>
+              <div style={{ padding: '0.75rem 1rem', background: '#f3f4f6', borderRadius: '1rem 1rem 1rem 0.25rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <ThinkingDots />
+              </div>
+            </div>
+          )}
 
           {session.phase === 'clarifying' && session.chips && (
             <ChipRow chips={session.chips} disabled={busy} onPick={sendText} />
@@ -570,5 +589,29 @@ function Row({ label, value }: { label: string; value: string }) {
       <dt style={{ color: '#6b7280', minWidth: '4rem' }}>{label}</dt>
       <dd style={{ margin: 0, color: '#111827' }}>{value}</dd>
     </div>
+  )
+}
+
+function ThinkingDots() {
+  return (
+    <>
+      <style>{`
+        @keyframes thinking-bounce {
+          0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+          40% { transform: translateY(-5px); opacity: 1; }
+        }
+        .thinking-dot {
+          width: 7px; height: 7px;
+          background: #9ca3af;
+          border-radius: 50%;
+          animation: thinking-bounce 1.2s ease-in-out infinite;
+        }
+        .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+        .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+      `}</style>
+      <div className="thinking-dot" />
+      <div className="thinking-dot" />
+      <div className="thinking-dot" />
+    </>
   )
 }
