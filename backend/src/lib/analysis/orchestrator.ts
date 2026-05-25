@@ -75,10 +75,12 @@ async function streamAssistantText(
 ) {
   pushTurn(session, 'assistant', '')
   const idx = session.turns.length - 1
+  // 先把含空 assistant turn 的 session 推给前端，让它准备好接收 token
+  await emit({ type: 'session', session: { ...session } })
   for (const ch of text) {
     session.turns[idx].content += ch
     await emit({ type: 'token', content: ch })
-    await sleep(8)
+    await sleep(30)
   }
 }
 

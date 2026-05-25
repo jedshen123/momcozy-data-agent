@@ -10,7 +10,7 @@ import { dispatchAnalysisEvent } from './analysisApi'
 const examples = [
   '查询APP总用户数是多少',
   '绑定各个设备的用户数分布',
-  '最近15天绑定M9的社区活跃用户数趋势',
+  '最近15天有效绑定M9的社区活跃用户数趋势',
 ]
 
 const btn = (primary?: boolean): React.CSSProperties => ({
