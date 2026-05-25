@@ -36,7 +36,7 @@ function detectRegionFilter(userQuery: string): string | null {
 async function buildFilters(
   viewName: string,
   userQuery: string,
-  _metric: MetricDef
+  _metric: MetricDef | null
 ): Promise<CubeFilter[]> {
   const filters: CubeFilter[] = []
   const region = detectRegionFilter(userQuery)
@@ -56,25 +56,30 @@ export async function buildAnalysisQuerySpec(params: {
   let metricId = params.metricId
   if (params.dis?.entityIdA) metricId = params.dis.entityIdA
 
-  const metric = (await getMetricById(metricId)) || null
-  if (!metric) throw new Error('未找到指标定义')
+  // 语义层指标注册表（可选），找不到时直接走 LLM 语义路径
+  const metric = metricId ? ((await getMetricById(metricId)) || null) : null
 
-  const viewName = params.intent.view || metric.view || 'app_standard_indicators'
-  await getViewEntry(viewName)
+  const viewName = params.intent.view || metric?.view || 'app_standard_indicators'
 
   const { start, end } = resolveTimeBounds(params.intent.timeRange)
   const view = await getViewEntry(viewName)
   const timeDimension = await resolveViewMember(viewName, view.timeDimensionShort, view)
 
-  const breakdownShort = detectBreakdownShort(params.userQuery)
+  // 拆分维度：intent.breakdownShort（LLM 给出）> 关键词检测
+  const breakdownHint = params.intent.breakdownShort !== undefined
+    ? params.intent.breakdownShort
+    : detectBreakdownShort(params.userQuery)
   let breakdownDimension: string | null = null
-  if (breakdownShort && view.includes.has(breakdownShort)) {
-    breakdownDimension = await resolveViewMember(viewName, breakdownShort, view)
+  if (breakdownHint) {
+    try {
+      breakdownDimension = await resolveViewMember(viewName, breakdownHint, view)
+    } catch { /* 维度在该 View 中不存在时忽略 */ }
   }
 
   const filters = await buildFilters(viewName, params.userQuery, metric)
 
-  if (metric.type === 'composite' && metric.measureMap) {
+  // 复合指标
+  if (metric?.type === 'composite' && metric.measureMap) {
     const m1Ref = metric.measureMap.m1 || ''
     const m2Ref = metric.measureMap.m2 || ''
     const numerator = await resolveViewMemberFromRef(m1Ref)
@@ -93,13 +98,14 @@ export async function buildAnalysisQuerySpec(params: {
     }
   }
 
-  const measureShort = metric.measure || 'm_app_dau'
+  // 简单指标：语义层注册 measure > LLM 给出的 measureShort > 兜底
+  const measureShort = metric?.measure || params.intent.measureShort || 'm_app_dau'
   const primaryMeasure = await resolveViewMember(viewName, measureShort, view)
 
   return {
-    metricId: metric.id,
-    metricName: metric.name,
-    type: metric.type || 'simple',
+    metricId: metric?.id || '',
+    metricName: metric?.name || params.intent.metric || measureShort,
+    type: metric?.type || 'simple',
     viewName,
     primaryMeasure,
     timeDimension,

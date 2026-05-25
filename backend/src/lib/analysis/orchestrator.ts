@@ -11,8 +11,7 @@ import {
   loadSemanticAssets,
   matchDisambiguation,
   matchExperience,
-  matchMetric,
-  pickView
+  matchViewByLLM,
 } from './semantic.js'
 import type { SseWriter } from './sse.js'
 import type {
@@ -37,7 +36,9 @@ function buildIntent(
   metricId: string,
   viewName: string,
   timeRange: string,
-  defaultNote: string
+  defaultNote: string,
+  measureShort?: string,
+  breakdownShort?: string | null
 ): IntentCard {
   const region = /华东|华北|华南|渠道/.test(userText)
     ? userText.match(/华东|华北|华南|各渠道|渠道/)?.[0] || ''
@@ -53,7 +54,9 @@ function buildIntent(
     defaultNote,
     metric: metricName,
     metricId,
-    view: viewName
+    view: viewName,
+    measureShort,
+    breakdownShort
   }
 }
 
@@ -100,10 +103,9 @@ async function runExecuting(
 
   const assets = await loadSemanticAssets()
   const query = session.userQuery + ' ' + session.turns.filter(t => t.role === 'user').map(t => t.content).join(' ')
-  const metric = matchMetric(query, assets.metrics)
-  const view = pickView(metric, assets.views)
   const dis = matchDisambiguation(query, assets.disambiguations)
   const expMatch = matchExperience(query, assets.experiences)
+  const view = session.intent?.view || ''
 
   const steps: ExecutionStep[] = [
     { id: 's1', label: '⏳ 查询中…', status: 'pending' },
@@ -118,13 +120,13 @@ async function runExecuting(
     {
       id: 's3',
       label: dis
-        ? `应用澄清层 ${dis.id}（${dis.conceptA} vs ${dis.conceptB}）→ ${dis.entityIdA || metric?.id || ''}`
+        ? `应用澄清层 ${dis.id}（${dis.conceptA} vs ${dis.conceptB}）→ ${dis.entityIdA || session.intent?.metricId || ''}`
         : '无需应用澄清层',
       status: 'pending',
       highlight: dis ? 'dis_apply' : undefined
     },
     { id: 's4', label: `查询 View：${view}`, status: 'pending' },
-    { id: 's5', label: `执行 SQL：${metric?.name || '指标'}`, status: 'pending' }
+    { id: 's5', label: `执行 SQL：${session.intent?.metric || session.intent?.measureShort || '指标'}`, status: 'pending' }
   ]
 
   session.steps = steps
@@ -141,7 +143,7 @@ async function runExecuting(
       session.context.expHit = `${expMatch.exp.id}（${expMatch.score}%）`
     }
     if (dis && steps[i].id === 's3') {
-      session.context.disApplied = `${dis.id} → ${dis.entityIdA || metric?.id}`
+      session.context.disApplied = `${dis.id} → ${dis.entityIdA || session.intent?.metricId}`
     }
     if (steps[i].id === 's4') session.context.view = view
     await emit({ type: 'session', session: { ...session } })
@@ -151,9 +153,11 @@ async function runExecuting(
   s5.status = 'running'
   await emit({ type: 'session', session: { ...session } })
 
-  const metricForQuery = metric
-    ? { id: session.intent?.metricId || metric.id, name: metric.name, view: metric.view }
-    : { id: session.intent?.metricId || 'MTR-686516', name: '指标', view }
+  const metricForQuery = {
+    id: session.intent?.metricId || '',
+    name: session.intent?.metric || session.intent?.measureShort || '指标',
+    view: session.intent?.view || ''
+  }
 
   try {
     if (!session.intent) throw new Error('缺少意图确认信息')
@@ -166,7 +170,7 @@ async function runExecuting(
     s5.status = 'done'
     s5.label = `SQL 执行完成（${output.rowCount} 行）`
     s5.detail = output.sql
-    session.context.metric = metric?.name
+    session.context.metric = session.intent.metric || session.intent.measureShort
     session.context.executedSql = output.sql
     session.context.statusLabel = '执行完成'
     session.context.timeRange = session.intent.timeRange
@@ -263,23 +267,26 @@ export async function handleAnalysisEvent(
     const inferred = inferTimeRange(text) || inferTimeRange(session.userQuery)
     const timeRange = inferred?.timeRange || session.intent?.timeRange || '待指定'
     const defaultNote = inferred?.defaultNote || session.intent?.defaultNote || '📌 口径：系统默认财务 completed 订单'
-    const metric = matchMetric(text + session.userQuery, assets.metrics)
-    const view = pickView(metric, assets.views)
+
+    // 用 LLM 语义匹配 View、指标和拆分维度
+    const llmMatch = await matchViewByLLM(text + ' ' + session.userQuery)
 
     session.phase = 'intent_confirm'
     session.chips = undefined
     session.intent = buildIntent(
       text,
-      metric?.name || '业务指标',
-      metric?.id || 'MTR-686516',
-      view,
+      llmMatch.measureShort || '业务指标',
+      '',
+      llmMatch.viewName,
       timeRange,
-      defaultNote
+      defaultNote,
+      llmMatch.measureShort || undefined,
+      llmMatch.breakdownShort
     )
     session.context = {
       statusLabel: '待确认意图',
-      metric: metric?.name,
-      view,
+      metric: llmMatch.measureShort || undefined,
+      view: llmMatch.viewName,
       timeRange
     }
     await streamAssistantText(

@@ -1,4 +1,6 @@
 import { readAll } from '../storage.js'
+import { chatOnce } from '../llm.js'
+import { loadViewCatalog } from '../query/viewCatalog.js'
 import type { DisambiguationRecord, ExperienceRecord, MetricRecord } from './types.js'
 
 interface RawMetric {
@@ -159,4 +161,78 @@ export function matchExperience(text: string, list: ExperienceRecord[]) {
 export function pickView(metric: MetricRecord | null, views: string[]) {
   if (metric?.view && views.includes(metric.view)) return metric.view
   return views[0] || 'app_standard_indicators'
+}
+
+export interface LLMViewMatch {
+  viewName: string
+  measureShort: string
+  breakdownShort: string | null
+}
+
+/**
+ * 用 LLM 语义理解用户问题，从 viewCatalog 中选出最合适的 View，
+ * 并推断用户想查的指标短名和拆分维度短名。
+ * 重点利用 view 的 ai_context 字段做语义匹配。
+ */
+export async function matchViewByLLM(userQuery: string): Promise<LLMViewMatch> {
+  const catalog = await loadViewCatalog()
+  const views = [...catalog.values()]
+
+  const fallback: LLMViewMatch = {
+    viewName: views[0]?.name || 'app_standard_indicators',
+    measureShort: '',
+    breakdownShort: null
+  }
+
+  if (!views.length || !process.env.DEEPSEEK_API_KEY) return fallback
+
+  // 构建 views 描述（重点突出 ai_context）
+  const viewsDesc = views.map(v => {
+    const explicitMembers = [...v.includes].filter(m => m !== '*')
+    const membersStr = explicitMembers.length
+      ? explicitMembers.join(', ')
+      : '（成员见 Cube meta，包含 view 下全部字段）'
+    return [
+      `name: ${v.name}`,
+      v.title ? `title: ${v.title}` : null,
+      v.aiContext ? `ai_context: ${v.aiContext}` : null,
+      `includes: ${membersStr}`
+    ].filter(Boolean).join('\n  ')
+  }).map(s => `- ${s}`).join('\n\n')
+
+  const prompt = `你是数据仓库查询助手。根据用户问题，从下方可用 Views 中选出最合适的一个，并推断查询所需的指标和拆分维度。
+
+用户问题：${userQuery}
+
+可用 Views：
+${viewsDesc}
+
+选择依据：优先参考每个 View 的 ai_context 字段来判断语义匹配程度；includes 字段列出了 View 可用的成员名，用于推断 measureShort 和 breakdownShort。
+
+请只输出如下 JSON，不要 markdown 代码块，不要多余文字：
+{
+  "viewName": "选中的 view name（必须是上方列表中的 name 之一）",
+  "measureShort": "用户想查的指标短名（从 includes 中选，或根据语义推断，如 bound_user_cnt、user_cnt、dau、count）",
+  "breakdownShort": "拆分维度短名（从 includes 中选，如 device_type、data_source、country；无拆分需求则填 null）"
+}`
+
+  try {
+    const raw = await chatOnce([{ role: 'user', content: prompt }])
+    const json = raw.replace(/^```[a-z]*\n?|\n?```$/g, '').trim()
+    const parsed = JSON.parse(json) as Record<string, unknown>
+
+    const viewName = typeof parsed.viewName === 'string' && catalog.has(parsed.viewName)
+      ? parsed.viewName
+      : fallback.viewName
+
+    const measureShort = typeof parsed.measureShort === 'string' ? parsed.measureShort : ''
+
+    const breakdownShort = parsed.breakdownShort === null || parsed.breakdownShort === 'null' || !parsed.breakdownShort
+      ? null
+      : typeof parsed.breakdownShort === 'string' ? parsed.breakdownShort : null
+
+    return { viewName, measureShort, breakdownShort }
+  } catch {
+    return fallback
+  }
 }

@@ -21,6 +21,10 @@ export interface IntentCard {
   metric?: string
   metricId?: string
   view?: string
+  /** LLM 语义匹配给出的指标短名（优先级低于 metrics 注册表） */
+  measureShort?: string
+  /** LLM 语义匹配给出的拆分维度短名，null 表示无需拆分 */
+  breakdownShort?: string | null
 }
 
 export interface ExecutionStep {
