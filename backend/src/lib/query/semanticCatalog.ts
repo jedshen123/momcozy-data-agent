@@ -2,6 +2,7 @@ import { readAll } from '../storage.js'
 
 export interface CubeMeasure {
   name: string
+  title?: string
   type: string
   sql?: string
 }
@@ -68,6 +69,7 @@ export async function loadSemanticCatalog() {
         })),
         measures: ((c.measures as Array<Record<string, unknown>>) || []).map(m => ({
           name: m.name as string,
+          title: m.title as string | undefined,
           type: (m.type as string) || 'sum',
           sql: m.sql as string | undefined
         }))

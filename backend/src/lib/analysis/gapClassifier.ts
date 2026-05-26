@@ -1,6 +1,6 @@
 import type { GapType } from './types.js'
 
-const IMPLICIT_TIME = /上个月|上月|最近|本周|本季度|过去\s*\d+\s*天|近\s*\d+\s*天|今年|昨天|今日|本月/
+const IMPLICIT_TIME = /上个月|上月|最近|本周|本季度|过去\s*\d+\s*天|近\s*\d+\s*天|今年|昨天|今日|本月|全部时间|所有时间/
 const EXPLICIT_TIME = /\d{4}[-/年]\d{1,2}|Q[1-4]|季度/
 
 export interface TimeInference {
@@ -60,6 +60,12 @@ export function inferTimeRange(text: string, now = new Date()): { timeRange: str
       defaultNote: '📌 时间：已按「本季度」解析'
     }
   }
+  if (/全部时间|所有时间|不限时间/.test(t)) {
+    return {
+      timeRange: '全部时间',
+      defaultNote: ''
+    }
+  }
   if (IMPLICIT_TIME.test(t)) {
     start.setDate(start.getDate() - 30)
     return {
@@ -98,7 +104,7 @@ export function chipsForGap(missing: TimeInference['missingAspect']): string[] {
   if (missing === 'metric') {
     return ['销售额趋势', '活跃用户数', '渠道对比', '自定义指标']
   }
-  return ['本月至今', '过去 30 天', '过去 7 天', '自定义']
+  return ['本月至今', '过去 30 天', '过去 7 天', '全部时间', '自定义']
 }
 
 export function clarifyingPrompt(missing: TimeInference['missingAspect']): string {

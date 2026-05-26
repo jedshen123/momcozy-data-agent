@@ -1,6 +1,14 @@
 import type { AnalysisQuerySpec } from './analysisQuerySpec.js'
 import type { CubeQuery } from './cubeTypes.js'
 
+/** 构建 timeDimensions 条目，全部时间时省略 dateRange */
+function makeTimeDim(spec: AnalysisQuerySpec, granularity?: string) {
+  if (spec.timeStart && spec.timeEnd) {
+    return { dimension: spec.timeDimension, dateRange: [spec.timeStart, spec.timeEnd], granularity }
+  }
+  return granularity ? { dimension: spec.timeDimension, granularity } : { dimension: spec.timeDimension }
+}
+
 /**
  * 单值聚合查询（queryType === 'scalar'）：
  * 整个时间范围内汇总一个数，不按时间粒度展开，不按维度拆分
@@ -8,12 +16,7 @@ import type { CubeQuery } from './cubeTypes.js'
 export function buildScalarQuery(spec: AnalysisQuerySpec, measure: string): CubeQuery {
   return {
     measures: [measure],
-    timeDimensions: [
-      {
-        dimension: spec.timeDimension,
-        dateRange: [spec.timeStart, spec.timeEnd]
-      }
-    ],
+    timeDimensions: [makeTimeDim(spec)],
     filters: spec.filters,
     limit: 1
   }
@@ -25,13 +28,7 @@ export function buildScalarQuery(spec: AnalysisQuerySpec, measure: string): Cube
 export function buildTrendQuery(spec: AnalysisQuerySpec, measure: string): CubeQuery {
   return {
     measures: [measure],
-    timeDimensions: [
-      {
-        dimension: spec.timeDimension,
-        dateRange: [spec.timeStart, spec.timeEnd],
-        granularity: 'day'
-      }
-    ],
+    timeDimensions: [makeTimeDim(spec, 'day')],
     filters: spec.filters,
     order: { [spec.timeDimension]: 'asc' },
     limit: 500
@@ -43,15 +40,9 @@ export function buildTrendQuery(spec: AnalysisQuerySpec, measure: string): CubeQ
  */
 export function buildBreakdownQuery(spec: AnalysisQuerySpec, measure: string): CubeQuery {
   if (!spec.breakdownDimension) {
-    // 无拆分维度：返回整体聚合
     return {
       measures: [measure],
-      timeDimensions: [
-        {
-          dimension: spec.timeDimension,
-          dateRange: [spec.timeStart, spec.timeEnd]
-        }
-      ],
+      timeDimensions: [makeTimeDim(spec)],
       filters: spec.filters,
       limit: 1
     }
@@ -60,12 +51,7 @@ export function buildBreakdownQuery(spec: AnalysisQuerySpec, measure: string): C
   return {
     measures: [measure],
     dimensions: [spec.breakdownDimension],
-    timeDimensions: [
-      {
-        dimension: spec.timeDimension,
-        dateRange: [spec.timeStart, spec.timeEnd]
-      }
-    ],
+    timeDimensions: [makeTimeDim(spec)],
     filters: spec.filters,
     order: { [measure]: 'desc' },
     limit: 50
@@ -80,12 +66,7 @@ export function buildDistributionQuery(spec: AnalysisQuerySpec, measure: string)
   if (!spec.breakdownDimension) {
     return {
       measures: [measure],
-      timeDimensions: [
-        {
-          dimension: spec.timeDimension,
-          dateRange: [spec.timeStart, spec.timeEnd]
-        }
-      ],
+      timeDimensions: [makeTimeDim(spec)],
       filters: spec.filters,
       limit: 1
     }
@@ -94,12 +75,7 @@ export function buildDistributionQuery(spec: AnalysisQuerySpec, measure: string)
   return {
     measures: [measure],
     dimensions: [spec.breakdownDimension],
-    timeDimensions: [
-      {
-        dimension: spec.timeDimension,
-        dateRange: [spec.timeStart, spec.timeEnd]
-      }
-    ],
+    timeDimensions: [makeTimeDim(spec)],
     filters: spec.filters,
     order: { [measure]: 'desc' },
     limit: 100

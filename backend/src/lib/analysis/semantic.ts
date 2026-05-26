@@ -173,13 +173,15 @@ export interface FilterCondition {
 export interface LLMViewMatch {
   viewName: string
   measureShort: string
+  /** 指标的中文显示名（从语义目录查找），用于 UI 展示 */
+  measureTitle?: string
   breakdownShort: string | null
   queryType: QueryType
   filterConditions: FilterCondition[]
 }
 
 type RawCandidate = Record<string, unknown>
-type ViewMap = Map<string, { name: string; includes: Set<string> }>
+type ViewMap = Map<string, { name: string; includes: Set<string>; cubeNames: string[] }>
 
 function parseCandidate(raw: RawCandidate, catalog: ViewMap): LLMViewMatch | null {
   const validQueryTypes: QueryType[] = ['trend', 'breakdown', 'trend_breakdown', 'scalar']
@@ -214,6 +216,21 @@ function validateCandidate(c: LLMViewMatch, catalog: ViewMap): boolean {
   return true
 }
 
+function enrichWithTitle(
+  candidate: LLMViewMatch,
+  catalog: ViewMap,
+  memberMeta: Map<string, Map<string, { title?: string; aiContext?: string }>>
+): LLMViewMatch {
+  if (!candidate.measureShort) return candidate
+  const view = catalog.get(candidate.viewName)
+  if (!view) return candidate
+  for (const cubeName of view.cubeNames || []) {
+    const title = memberMeta.get(cubeName)?.get(candidate.measureShort)?.title
+    if (title) return { ...candidate, measureTitle: title }
+  }
+  return candidate
+}
+
 /**
  * 用 LLM 语义理解用户问题，从 viewCatalog 中选出最合适的 View，
  * 并推断用户想查的指标短名、拆分维度短名和查询类型。
@@ -234,15 +251,19 @@ export async function matchViewByLLM(userQuery: string): Promise<LLMViewMatch> {
 
   if (!views.length || !process.env.DEEPSEEK_API_KEY) return fallback
 
-  // 加载 cube 维度元数据，构建 cubeName → {shortName → {title, aiContext}} 映射
+  // 加载 cube 维度/度量元数据，构建 cubeName → {shortName → {title, aiContext}} 映射
   const { cubes } = await loadSemanticCatalog()
-  const cubeDimMeta = new Map<string, Map<string, { title?: string; aiContext?: string }>>()
+  // 合并 dimensions + measures 的 title 元数据
+  const cubeMemberMeta = new Map<string, Map<string, { title?: string; aiContext?: string }>>()
   for (const [cubeName, cubeDef] of cubes) {
-    const dimMap = new Map<string, { title?: string; aiContext?: string }>()
+    const memberMap = new Map<string, { title?: string; aiContext?: string }>()
     for (const d of cubeDef.dimensions) {
-      dimMap.set(d.name, { title: d.title, aiContext: d.aiContext })
+      memberMap.set(d.name, { title: d.title, aiContext: d.aiContext })
     }
-    cubeDimMeta.set(cubeName, dimMap)
+    for (const m of cubeDef.measures) {
+      memberMap.set(m.name, { title: m.title })
+    }
+    cubeMemberMeta.set(cubeName, memberMap)
   }
 
   // 构建 views 描述（重点突出 ai_context + 维度元数据）
@@ -253,7 +274,7 @@ export async function matchViewByLLM(userQuery: string): Promise<LLMViewMatch> {
     const dimDescLines: string[] = []
     for (const memberShort of explicitMembers) {
       for (const cubeName of v.cubeNames) {
-        const meta = cubeDimMeta.get(cubeName)?.get(memberShort)
+        const meta = cubeMemberMeta.get(cubeName)?.get(memberShort)
         if (meta?.title || meta?.aiContext) {
           const desc = [meta.title, meta.aiContext].filter(Boolean).join('；')
           dimDescLines.push(`    - ${memberShort}: ${desc}`)
@@ -332,13 +353,13 @@ filterConditions 提取规则：
         if (candidate !== candidates[0]) {
           console.log(`[llm] view 候选校验：降级 ${candidates[0].viewName} → ${candidate.viewName}（measureShort=${candidate.measureShort}）`)
         }
-        return candidate
+        return enrichWithTitle(candidate, viewMap, cubeMemberMeta)
       }
     }
 
     // 全部未通过校验 → 降级返回第一个候选（兜底）
     console.log(`[llm] view 候选校验：全部未通过，兜底使用 ${candidates[0].viewName}`)
-    return candidates[0]
+    return enrichWithTitle(candidates[0], viewMap, cubeMemberMeta)
   } catch {
     return fallback
   }

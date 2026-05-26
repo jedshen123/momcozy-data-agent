@@ -51,10 +51,14 @@ function buildIntent(
     : queryType === 'trend' ? '趋势分析'
     : queryType === 'trend_breakdown' ? '趋势 & 分布分析'
     : '数据分析'
-  const summary = [region, timeRange.split(' ~ ')[0] ? '已解析时间' : '', metricName, analysisLabel]
+
+  // 只有时间已实际确定时才显示，避免「待指定」等占位符出现在摘要里
+  const timeDisplay = timeRange.includes('~') ? timeRange
+    : timeRange === '全部时间' ? '全部时间'
+    : ''
+  const summary = [region, timeDisplay, metricName, analysisLabel]
     .filter(Boolean)
     .join(' · ')
-    .replace('已解析时间', timeRange.includes('~') ? timeRange : '指定区间')
 
   return {
     summary: summary || `${metricName} · ${viewName}`,
@@ -291,7 +295,7 @@ export async function handleAnalysisEvent(
 
     const inferred = inferTimeRange(text) || inferTimeRange(session.userQuery)
     const timeRange = inferred?.timeRange || session.intent?.timeRange || '待指定'
-    const defaultNote = inferred?.defaultNote || session.intent?.defaultNote || '📌 口径：系统默认财务 completed 订单'
+    const defaultNote = inferred?.defaultNote || session.intent?.defaultNote || ''
 
     // 用 LLM 语义匹配 View、指标和拆分维度
     const t0 = Date.now()
@@ -304,7 +308,7 @@ export async function handleAnalysisEvent(
     session.chips = undefined
     session.intent = buildIntent(
       text,
-      llmMatch.measureShort || '业务指标',
+      llmMatch.measureTitle || llmMatch.measureShort || '业务指标',
       '',
       llmMatch.viewName,
       timeRange,
@@ -316,18 +320,18 @@ export async function handleAnalysisEvent(
     )
     session.context = {
       statusLabel: '待确认意图',
-      metric: llmMatch.measureShort || undefined,
+      metric: llmMatch.measureTitle || llmMatch.measureShort || undefined,
       view: llmMatch.viewName,
       timeRange
     }
-    await streamAssistantText(
-      emit,
-      session,
-      '好的，确认方案：\n\n' +
-        `${session.intent.summary}\n` +
-        `时间：${session.intent.timeRange}\n` +
-        `${session.intent.defaultNote}`
-    )
+    const intentLines = [
+      '好的，确认方案：',
+      '',
+      session.intent.summary,
+      session.intent.timeRange !== '待指定' ? `时间：${session.intent.timeRange}` : null,
+      session.intent.defaultNote || null
+    ].filter((l): l is string => l !== null).join('\n')
+    await streamAssistantText(emit, session, intentLines)
     await emit({ type: 'session', session })
     await emit({ type: 'done' })
     return

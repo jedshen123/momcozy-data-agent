@@ -11,5 +11,6 @@ export function defaultTimeRange(): { start: string; end: string } {
 }
 
 export function resolveTimeBounds(timeRange: string): { start: string; end: string } {
+  if (timeRange === '全部时间') return { start: '', end: '' }
   return parseTimeRange(timeRange) || defaultTimeRange()
 }
