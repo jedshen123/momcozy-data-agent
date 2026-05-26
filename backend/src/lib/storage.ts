@@ -91,7 +91,11 @@ export async function write<T>(collection: string, id: string, data: T): Promise
   const dir = collectionDir(collection)
   await ensureDir(dir)
   const filePath = join(dir, `${id}${extFor(collection)}`)
-  const content = yaml.dump(data, { indent: 2, lineWidth: -1 })
+  // cubes/views 需要顶层数组包装，Cube.js YamlCompiler 要求此格式
+  const wrapped = (collection === 'cubes' || collection === 'views')
+    ? { [collection]: [data] }
+    : data
+  const content = yaml.dump(wrapped, { indent: 2, lineWidth: -1 })
   await writeFile(filePath, content, 'utf-8')
 }
 
