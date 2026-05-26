@@ -1,0 +1,13 @@
+id: EXP-726827
+original_question: 上个月各渠道的销售额是多少？
+analysis_conclusion: 全区域在 2026-03-31 ~ 2026-04-29 的客单价，日均约 1.24
+similar_questions: []
+execution_path:
+  metrics:
+    - 客单价
+  views:
+    - app_detail_exploration
+  filters: []
+source: 分析沉淀
+usage_count: 0
+created_at: '2026-05-22'
