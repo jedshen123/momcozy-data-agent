@@ -339,18 +339,20 @@ function Step2FieldSelector({
 // ——— Step 3：View 基本信息 ———
 
 function Step3ViewMeta({
-  viewName, viewTitle, description, aiContext,
-  onViewNameChange, onViewTitleChange, onDescriptionChange, onAiContextChange,
+  viewName, viewTitle, description, aiContext, snapshot,
+  onViewNameChange, onViewTitleChange, onDescriptionChange, onAiContextChange, onSnapshotChange,
   onPrev, onSave, saving,
 }: {
   viewName: string
   viewTitle: string
   description: string
   aiContext: string
+  snapshot: boolean
   onViewNameChange: (v: string) => void
   onViewTitleChange: (v: string) => void
   onDescriptionChange: (v: string) => void
   onAiContextChange: (v: string) => void
+  onSnapshotChange: (v: boolean) => void
   onPrev: () => void
   onSave: () => void
   saving: boolean
@@ -401,6 +403,22 @@ function Step3ViewMeta({
             style={{ width: '100%', padding: '0.5rem 0.75rem', border: '1px solid #d1d5db', borderRadius: '0.375rem', fontSize: '0.875rem', outline: 'none', resize: 'vertical', boxSizing: 'border-box', lineHeight: '1.6' }}
           />
         </div>
+        <div style={{ marginBottom: '1.25rem' }}>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.625rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={snapshot}
+              onChange={e => onSnapshotChange(e.target.checked)}
+              style={{ marginTop: '0.125rem', flexShrink: 0 }}
+            />
+            <div>
+              <span style={{ fontSize: '0.8125rem', fontWeight: '600', color: '#374151' }}>每日快照表（snapshot）</span>
+              <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: '0.25rem 0 0' }}>
+                勾选后，scalar 查询（问总量/当前值）会自动取最新 busi_date 分区数据，而非聚合全量历史数据
+              </p>
+            </div>
+          </label>
+        </div>
       </div>
 
       <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
@@ -432,6 +450,7 @@ export default function ViewEditorPage() {
   const [viewTitle, setViewTitle] = useState('')
   const [description, setDescription] = useState('')
   const [aiContext, setAiContext] = useState('')
+  const [snapshot, setSnapshot] = useState(false)
 
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState(false)
@@ -461,6 +480,7 @@ export default function ViewEditorPage() {
         setViewTitle(view.title || '')
         setDescription(view.description || '')
         setAiContext(view.meta?.ai_context || '')
+        setSnapshot(view.meta?.snapshot ?? false)
         const paths: CubePathDraft[] = (view.cubes || []).map(cp => ({
           join_path: cp.join_path,
           cubeName: cp.join_path.split('.').pop() || cp.join_path,
@@ -495,7 +515,12 @@ export default function ViewEditorPage() {
           includes: cp.includes,
           ...(cp.prefix ? { prefix: true } : {}),
         } satisfies ViewCubePath)),
-        ...(aiContext.trim() ? { meta: { ai_context: aiContext.trim() } } : {}),
+        ...(aiContext.trim() || snapshot ? {
+          meta: {
+            ...(aiContext.trim() ? { ai_context: aiContext.trim() } : {}),
+            ...(snapshot ? { snapshot: true } : {}),
+          }
+        } : {}),
       }
 
       const method = isEdit ? 'PUT' : 'POST'
@@ -565,10 +590,12 @@ export default function ViewEditorPage() {
             viewTitle={viewTitle}
             description={description}
             aiContext={aiContext}
+            snapshot={snapshot}
             onViewNameChange={setViewName}
             onViewTitleChange={setViewTitle}
             onDescriptionChange={setDescription}
             onAiContextChange={setAiContext}
+            onSnapshotChange={setSnapshot}
             onPrev={() => setStep(2)}
             onSave={handleSave}
             saving={saving}

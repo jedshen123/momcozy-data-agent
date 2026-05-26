@@ -12,7 +12,7 @@ export interface View {
   title: string
   description?: string
   cubes: ViewCubePath[]
-  meta?: { ai_context?: string }
+  meta?: { ai_context?: string; snapshot?: boolean }
 }
 
 function DeleteDialog({
