@@ -35,11 +35,21 @@ export function inferTimeRange(text: string, now = new Date()): { timeRange: str
       defaultNote: '📌 时间：已按「过去 30 天」解析'
     }
   }
-  if (/过去\s*7\s*天|最近\s*7\s*天|本周/.test(t)) {
+  if (/过去\s*7\s*天|最近\s*7\s*天|近\s*7\s*天|本周/.test(t)) {
     start.setDate(start.getDate() - 7)
     return {
       timeRange: `${formatDate(start)} ~ ${formatDate(end)}`,
       defaultNote: '📌 时间：已按「过去 7 天 / 本周」解析'
+    }
+  }
+  // 通用 N 天解析：「最近/过去/近 N 天」
+  const nDayMatch = t.match(/(?:最近|过去|近)\s*(\d+)\s*天/)
+  if (nDayMatch) {
+    const n = parseInt(nDayMatch[1], 10)
+    start.setDate(start.getDate() - n)
+    return {
+      timeRange: `${formatDate(start)} ~ ${formatDate(end)}`,
+      defaultNote: `📌 时间：已按「最近 ${n} 天」解析`
     }
   }
   if (/本季度/.test(t)) {
