@@ -170,10 +170,36 @@ export interface LLMViewMatch {
   queryType: QueryType
 }
 
+type RawCandidate = Record<string, unknown>
+type ViewMap = Map<string, { name: string; includes: Set<string> }>
+
+function parseCandidate(raw: RawCandidate, catalog: ViewMap): LLMViewMatch | null {
+  const validQueryTypes: QueryType[] = ['trend', 'breakdown', 'trend_breakdown', 'scalar']
+  const viewName = typeof raw.viewName === 'string' && catalog.has(raw.viewName) ? raw.viewName : null
+  if (!viewName) return null
+  const measureShort = typeof raw.measureShort === 'string' ? raw.measureShort : ''
+  const breakdownShort = raw.breakdownShort === null || raw.breakdownShort === 'null' || !raw.breakdownShort
+    ? null
+    : typeof raw.breakdownShort === 'string' ? raw.breakdownShort : null
+  const queryType: QueryType = validQueryTypes.includes(raw.queryType as QueryType)
+    ? (raw.queryType as QueryType)
+    : 'trend_breakdown'
+  return { viewName, measureShort, breakdownShort, queryType }
+}
+
+function validateCandidate(c: LLMViewMatch, catalog: ViewMap): boolean {
+  const entry = catalog.get(c.viewName)
+  if (!entry) return false
+  if (c.measureShort && !entry.includes.has(c.measureShort)) return false
+  if (c.breakdownShort && !entry.includes.has(c.breakdownShort)) return false
+  return true
+}
+
 /**
  * 用 LLM 语义理解用户问题，从 viewCatalog 中选出最合适的 View，
  * 并推断用户想查的指标短名、拆分维度短名和查询类型。
- * 重点利用 view 的 ai_context 字段做语义匹配。
+ * LLM 返回有序候选列表（最多3个），后端按顺序做 includes 成员校验，
+ * 取第一个通过校验的候选，消除对 ai_context 文案精准度的依赖。
  */
 export async function matchViewByLLM(userQuery: string): Promise<LLMViewMatch> {
   const catalog = await loadViewCatalog()
@@ -202,7 +228,7 @@ export async function matchViewByLLM(userQuery: string): Promise<LLMViewMatch> {
     ].filter(Boolean).join('\n  ')
   }).map(s => `- ${s}`).join('\n\n')
 
-  const prompt = `你是数据仓库查询助手。根据用户问题，从下方可用 Views 中选出最合适的一个，推断查询所需的指标、拆分维度和查询类型。
+  const prompt = `你是数据仓库查询助手。根据用户问题，从下方可用 Views 中按匹配度从高到低选出最多3个候选，推断每个候选所需的指标、拆分维度和查询类型。
 
 用户问题：${userQuery}
 
@@ -215,39 +241,48 @@ ${viewsDesc}
 - "breakdown"：用户问分布、各个X的Y、按X分组，只需要按维度聚合，不需要时间序列
 - "trend_breakdown"：用户同时关心趋势和分布（默认）
 
-选择依据：优先参考每个 View 的 ai_context 字段来判断语义匹配程度；includes 字段列出了 View 可用的成员名，用于推断 measureShort 和 breakdownShort。
+选择依据：优先参考每个 View 的 ai_context 字段来判断语义匹配程度；includes 字段列出了 View 可用的成员名，measureShort 和 breakdownShort 必须从对应 View 的 includes 中选取。
 
-请只输出如下 JSON，不要 markdown 代码块，不要多余文字：
-{
-  "viewName": "选中的 view name（必须是上方列表中的 name 之一）",
-  "queryType": "scalar | trend | breakdown | trend_breakdown",
-  "measureShort": "用户想查的指标短名（从 includes 中选，如 bound_user_cnt、user_cnt、dau）",
-  "breakdownShort": "拆分维度短名（从 includes 中选，如 device_type、data_source；queryType为trend/scalar时填null；无拆分需求也填null）"
-}`
+请只输出 JSON 数组，不要 markdown 代码块，不要多余文字：
+[
+  {
+    "viewName": "匹配度最高的 view name（必须是上方列表中的 name 之一）",
+    "queryType": "scalar | trend | breakdown | trend_breakdown",
+    "measureShort": "用户想查的指标短名（必须来自该 view 的 includes）",
+    "breakdownShort": "拆分维度短名（必须来自该 view 的 includes；queryType为trend/scalar时填null；无拆分需求也填null）"
+  }
+]`
 
   try {
     const t0 = Date.now()
     const raw = await chatOnce([{ role: 'user', content: prompt }])
     console.log(`[llm] chatOnce 完成 ${Date.now() - t0}ms`)
     const json = raw.replace(/^```[a-z]*\n?|\n?```$/g, '').trim()
-    const parsed = JSON.parse(json) as Record<string, unknown>
+    const parsed = JSON.parse(json)
 
-    const viewName = typeof parsed.viewName === 'string' && catalog.has(parsed.viewName)
-      ? parsed.viewName
-      : fallback.viewName
+    // 兼容 LLM 返回对象（旧格式）或数组（新格式）
+    const rawList: RawCandidate[] = Array.isArray(parsed) ? parsed : [parsed]
 
-    const measureShort = typeof parsed.measureShort === 'string' ? parsed.measureShort : ''
+    const viewMap: ViewMap = catalog
+    const candidates: LLMViewMatch[] = rawList
+      .map(item => parseCandidate(item, viewMap))
+      .filter((c): c is LLMViewMatch => c !== null)
 
-    const breakdownShort = parsed.breakdownShort === null || parsed.breakdownShort === 'null' || !parsed.breakdownShort
-      ? null
-      : typeof parsed.breakdownShort === 'string' ? parsed.breakdownShort : null
+    if (!candidates.length) return fallback
 
-    const validQueryTypes: QueryType[] = ['trend', 'breakdown', 'trend_breakdown', 'scalar']
-    const queryType: QueryType = validQueryTypes.includes(parsed.queryType as QueryType)
-      ? (parsed.queryType as QueryType)
-      : 'trend_breakdown'
+    // 按顺序找第一个 includes 校验通过的候选
+    for (const candidate of candidates) {
+      if (validateCandidate(candidate, viewMap)) {
+        if (candidate !== candidates[0]) {
+          console.log(`[llm] view 候选校验：降级 ${candidates[0].viewName} → ${candidate.viewName}（measureShort=${candidate.measureShort}）`)
+        }
+        return candidate
+      }
+    }
 
-    return { viewName, measureShort, breakdownShort, queryType }
+    // 全部未通过校验 → 降级返回第一个候选（兜底）
+    console.log(`[llm] view 候选校验：全部未通过，兜底使用 ${candidates[0].viewName}`)
+    return candidates[0]
   } catch {
     return fallback
   }
