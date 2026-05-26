@@ -59,7 +59,7 @@ function buildIntent(
     : timeRange === '不限时间' ? '不限时间'
     : ''
   const filterDesc = filterConditions?.length
-    ? filterConditions.map(f => f.values.join('/')).join('·')
+    ? filterConditions.map(f => `${f.dimension}=${f.values.join('/')}`).join('·')
     : ''
   const summary = [filterDesc, timeDisplay, metricName, analysisLabel]
     .filter(Boolean)
