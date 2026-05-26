@@ -61,9 +61,11 @@ export function formatAnalysisResult(params: {
     chartType = series.length > 0 ? 'line' : 'bar'
   }
 
-  const timeLabel = (plan.timeStart && plan.timeEnd)
-    ? `${plan.timeStart} ~ ${plan.timeEnd}`
-    : (plan.timeStart || plan.timeEnd || '不限时间')
+  const timeLabel = plan.displayTimeRange && plan.displayTimeRange !== '待指定'
+    ? plan.displayTimeRange
+    : (plan.timeStart && plan.timeEnd)
+      ? `${plan.timeStart} ~ ${plan.timeEnd}`
+      : (plan.timeStart || plan.timeEnd || '不限时间')
   const regionLabel = region ? `${region}` : ''
   const top = breakdownRaw[0]
   const avgDaily = series.length ? series.reduce((a, b) => a + b.value, 0) / series.length : 0

@@ -37,7 +37,7 @@ export async function runAnalysisQuery(params: {
   const region = /华东|华北|华南/.exec(params.userQuery)?.[0] ?? null
 
   return formatAnalysisResult({
-    plan: { ...plan, engine: 'sqlite' },
+    plan: { ...plan, engine: 'sqlite', displayTimeRange: params.intent.timeRange },
     trendRows: trendResult.rows,
     breakdownRows: breakdownResult.rows,
     userQuery: params.userQuery,

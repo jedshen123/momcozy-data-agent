@@ -14,6 +14,8 @@ export interface QueryPlan {
   breakdownDimension: string | null
   timeStart: string
   timeEnd: string
+  /** 用户意图时间范围，用于展示（如「不限时间」），优先于 timeStart~timeEnd 拼接 */
+  displayTimeRange?: string
   queryType?: QueryType
   /** Cube REST 查询体（调试/预览） */
   cubeQueries?: unknown[]

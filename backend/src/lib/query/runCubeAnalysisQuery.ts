@@ -198,6 +198,7 @@ export async function runCubeAnalysisQuery(params: {
     breakdownDimension: spec.breakdownDimension,
     timeStart: effectiveSpec.timeStart,
     timeEnd: effectiveSpec.timeEnd,
+    displayTimeRange: params.intent.timeRange,
     queryType: spec.queryType,
     cubeQueries: queries.map(q => q.query)
   }
