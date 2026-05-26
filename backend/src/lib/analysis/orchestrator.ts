@@ -200,6 +200,7 @@ async function runExecuting(
     session.result = {
       summary: output.summary,
       chartTitle: output.chartTitle,
+      chartType: output.chartType,
       breakdown: output.breakdown,
       series: output.series,
       sql: output.sql,
