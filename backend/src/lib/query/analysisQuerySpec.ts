@@ -37,14 +37,33 @@ function detectRegionFilter(userQuery: string): string | null {
 async function buildFilters(
   viewName: string,
   userQuery: string,
-  _metric: MetricDef | null
+  _metric: MetricDef | null,
+  intentFilters?: Array<{ dimension: string; operator: string; values: string[] }>
 ): Promise<CubeFilter[]> {
   const filters: CubeFilter[] = []
-  const region = detectRegionFilter(userQuery)
-  if (region && region !== '全国') {
-    const dim = await resolveViewMember(viewName, 'country_ad_ch')
-    filters.push({ member: dim, operator: 'contains', values: [region] })
+
+  // LLM 提取的维度过滤条件（优先处理）
+  if (intentFilters?.length) {
+    for (const f of intentFilters) {
+      try {
+        const member = await resolveViewMember(viewName, f.dimension)
+        filters.push({ member, operator: f.operator, values: f.values })
+      } catch {
+        console.warn(`[buildFilters] 维度 ${f.dimension} 在 view ${viewName} 中未找到，跳过`)
+      }
+    }
   }
+
+  // 地区过滤（关键词兜底，LLM 未覆盖时生效）
+  const alreadyFiltered = filters.some(f => f.member.includes('country_ad_ch'))
+  if (!alreadyFiltered) {
+    const region = detectRegionFilter(userQuery)
+    if (region && region !== '全国') {
+      const dim = await resolveViewMember(viewName, 'country_ad_ch')
+      filters.push({ member: dim, operator: 'contains', values: [region] })
+    }
+  }
+
   return filters
 }
 
@@ -77,7 +96,7 @@ export async function buildAnalysisQuerySpec(params: {
     } catch { /* 维度在该 View 中不存在时忽略 */ }
   }
 
-  const filters = await buildFilters(viewName, params.userQuery, metric)
+  const filters = await buildFilters(viewName, params.userQuery, metric, params.intent.filterConditions)
 
   // queryType：intent 优先（LLM 已识别），否则按是否有拆分维度推断
   const queryType: QueryType = params.intent.queryType

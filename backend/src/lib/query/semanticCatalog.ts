@@ -9,7 +9,7 @@ export interface CubeMeasure {
 export interface CubeDef {
   name: string
   sqlTable: string
-  dimensions: Array<{ name: string; sql?: string }>
+  dimensions: Array<{ name: string; title?: string; sql?: string; aiContext?: string }>
   measures: CubeMeasure[]
 }
 
@@ -62,7 +62,9 @@ export async function loadSemanticCatalog() {
         sqlTable: (c.sql_table as string) || name,
         dimensions: ((c.dimensions as Array<Record<string, unknown>>) || []).map(d => ({
           name: d.name as string,
-          sql: d.sql as string | undefined
+          title: d.title as string | undefined,
+          sql: d.sql as string | undefined,
+          aiContext: (d.meta as Record<string, unknown> | undefined)?.ai_context as string | undefined
         })),
         measures: ((c.measures as Array<Record<string, unknown>>) || []).map(m => ({
           name: m.name as string,

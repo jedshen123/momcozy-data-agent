@@ -40,7 +40,8 @@ function buildIntent(
   defaultNote: string,
   measureShort?: string,
   breakdownShort?: string | null,
-  queryType?: QueryType
+  queryType?: QueryType,
+  filterConditions?: Array<{ dimension: string; operator: string; values: string[] }>
 ): IntentCard {
   const region = /华东|华北|华南|渠道/.test(userText)
     ? userText.match(/华东|华北|华南|各渠道|渠道/)?.[0] || ''
@@ -64,7 +65,8 @@ function buildIntent(
     view: viewName,
     measureShort,
     breakdownShort,
-    queryType
+    queryType,
+    filterConditions: filterConditions?.length ? filterConditions : undefined
   }
 }
 
@@ -309,7 +311,8 @@ export async function handleAnalysisEvent(
       defaultNote,
       llmMatch.measureShort || undefined,
       llmMatch.breakdownShort,
-      llmMatch.queryType
+      llmMatch.queryType,
+      llmMatch.filterConditions
     )
     session.context = {
       statusLabel: '待确认意图',

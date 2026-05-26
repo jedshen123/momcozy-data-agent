@@ -1,6 +1,7 @@
 import { readAll } from '../storage.js'
 import { chatOnce } from '../llm.js'
 import { loadViewCatalog } from '../query/viewCatalog.js'
+import { loadSemanticCatalog } from '../query/semanticCatalog.js'
 import type { DisambiguationRecord, ExperienceRecord, MetricRecord, QueryType } from './types.js'
 
 interface RawMetric {
@@ -163,11 +164,18 @@ export function pickView(metric: MetricRecord | null, views: string[]) {
   return views[0] || 'app_standard_indicators'
 }
 
+export interface FilterCondition {
+  dimension: string
+  operator: string
+  values: string[]
+}
+
 export interface LLMViewMatch {
   viewName: string
   measureShort: string
   breakdownShort: string | null
   queryType: QueryType
+  filterConditions: FilterCondition[]
 }
 
 type RawCandidate = Record<string, unknown>
@@ -184,7 +192,18 @@ function parseCandidate(raw: RawCandidate, catalog: ViewMap): LLMViewMatch | nul
   const queryType: QueryType = validQueryTypes.includes(raw.queryType as QueryType)
     ? (raw.queryType as QueryType)
     : 'trend_breakdown'
-  return { viewName, measureShort, breakdownShort, queryType }
+
+  const rawFilters = Array.isArray(raw.filterConditions) ? raw.filterConditions : []
+  const filterConditions: FilterCondition[] = rawFilters
+    .filter((f): f is Record<string, unknown> => f && typeof f === 'object')
+    .map(f => ({
+      dimension: typeof f.dimension === 'string' ? f.dimension : '',
+      operator: typeof f.operator === 'string' ? f.operator : 'equals',
+      values: Array.isArray(f.values) ? f.values.map(String) : []
+    }))
+    .filter(f => f.dimension && f.values.length > 0)
+
+  return { viewName, measureShort, breakdownShort, queryType, filterConditions }
 }
 
 function validateCandidate(c: LLMViewMatch, catalog: ViewMap): boolean {
@@ -209,14 +228,40 @@ export async function matchViewByLLM(userQuery: string): Promise<LLMViewMatch> {
     viewName: views[0]?.name || 'app_standard_indicators',
     measureShort: '',
     breakdownShort: null,
-    queryType: 'trend_breakdown'
+    queryType: 'trend_breakdown',
+    filterConditions: []
   }
 
   if (!views.length || !process.env.DEEPSEEK_API_KEY) return fallback
 
-  // 构建 views 描述（重点突出 ai_context）
+  // 加载 cube 维度元数据，构建 cubeName → {shortName → {title, aiContext}} 映射
+  const { cubes } = await loadSemanticCatalog()
+  const cubeDimMeta = new Map<string, Map<string, { title?: string; aiContext?: string }>>()
+  for (const [cubeName, cubeDef] of cubes) {
+    const dimMap = new Map<string, { title?: string; aiContext?: string }>()
+    for (const d of cubeDef.dimensions) {
+      dimMap.set(d.name, { title: d.title, aiContext: d.aiContext })
+    }
+    cubeDimMeta.set(cubeName, dimMap)
+  }
+
+  // 构建 views 描述（重点突出 ai_context + 维度元数据）
   const viewsDesc = views.map(v => {
     const explicitMembers = [...v.includes].filter(m => m !== '*')
+
+    // 为该 view 下所有维度拼出描述
+    const dimDescLines: string[] = []
+    for (const memberShort of explicitMembers) {
+      for (const cubeName of v.cubeNames) {
+        const meta = cubeDimMeta.get(cubeName)?.get(memberShort)
+        if (meta?.title || meta?.aiContext) {
+          const desc = [meta.title, meta.aiContext].filter(Boolean).join('；')
+          dimDescLines.push(`    - ${memberShort}: ${desc}`)
+          break
+        }
+      }
+    }
+
     const membersStr = explicitMembers.length
       ? explicitMembers.join(', ')
       : '（成员见 Cube meta，包含 view 下全部字段）'
@@ -224,11 +269,12 @@ export async function matchViewByLLM(userQuery: string): Promise<LLMViewMatch> {
       `name: ${v.name}`,
       v.title ? `title: ${v.title}` : null,
       v.aiContext ? `ai_context: ${v.aiContext}` : null,
-      `includes: ${membersStr}`
+      `includes: ${membersStr}`,
+      dimDescLines.length ? `dimension_meta:\n${dimDescLines.join('\n')}` : null
     ].filter(Boolean).join('\n  ')
   }).map(s => `- ${s}`).join('\n\n')
 
-  const prompt = `你是数据仓库查询助手。根据用户问题，从下方可用 Views 中按匹配度从高到低选出最多3个候选，推断每个候选所需的指标、拆分维度和查询类型。
+  const prompt = `你是数据仓库查询助手。根据用户问题，从下方可用 Views 中按匹配度从高到低选出最多3个候选，推断每个候选所需的指标、拆分维度、查询类型，以及需要过滤的维度条件。
 
 用户问题：${userQuery}
 
@@ -243,13 +289,23 @@ ${viewsDesc}
 
 选择依据：优先参考每个 View 的 ai_context 字段来判断语义匹配程度；includes 字段列出了 View 可用的成员名，measureShort 和 breakdownShort 必须从对应 View 的 includes 中选取。
 
+filterConditions 提取规则：
+- 仔细分析用户问题中的限定条件（产品型号、状态标志、地区、渠道等），将其转为维度过滤
+- dimension 必须是该 view 的 includes 中的成员名
+- operator 可选值：equals / contains / gt / lt / gte / lte
+- 参考 dimension_meta 中的描述来理解维度含义和可选值
+- 如果没有额外限定条件则 filterConditions 为空数组
+
 请只输出 JSON 数组，不要 markdown 代码块，不要多余文字：
 [
   {
     "viewName": "匹配度最高的 view name（必须是上方列表中的 name 之一）",
     "queryType": "scalar | trend | breakdown | trend_breakdown",
     "measureShort": "用户想查的指标短名（必须来自该 view 的 includes）",
-    "breakdownShort": "拆分维度短名（必须来自该 view 的 includes；queryType为trend/scalar时填null；无拆分需求也填null）"
+    "breakdownShort": "拆分维度短名（必须来自该 view 的 includes；queryType为trend/scalar时填null；无拆分需求也填null）",
+    "filterConditions": [
+      {"dimension": "维度短名（必须来自该 view 的 includes）", "operator": "equals", "values": ["过滤值"]}
+    ]
   }
 ]`
 
