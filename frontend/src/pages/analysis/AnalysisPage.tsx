@@ -310,6 +310,18 @@ function IntentBlock({
       <div style={{ fontWeight: 600, marginBottom: '0.5rem', fontSize: '0.875rem' }}>意图确认</div>
       {renderField('方案', 'summary')}
       {renderField('时间', 'timeRange')}
+      {intent.filterConditions && intent.filterConditions.length > 0 && (
+        <div style={{ marginTop: '0.5rem' }}>
+          <strong>过滤条件</strong>
+          <div style={{ marginTop: '0.15rem', display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+            {intent.filterConditions.map((f, i) => (
+              <span key={i} style={{ fontSize: '0.8125rem', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '0.375rem', padding: '0.1rem 0.5rem' }}>
+                {f.values.join(' / ')}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {renderField('说明', 'defaultNote')}
       <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
         {editing ? (

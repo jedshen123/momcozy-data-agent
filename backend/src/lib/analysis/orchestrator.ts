@@ -58,7 +58,10 @@ function buildIntent(
     : timeRange.includes('~') ? timeRange
     : timeRange === '不限时间' ? '不限时间'
     : ''
-  const summary = [region, timeDisplay, metricName, analysisLabel]
+  const filterDesc = filterConditions?.length
+    ? filterConditions.map(f => f.values.join('/')).join('·')
+    : ''
+  const summary = [filterDesc, timeDisplay, metricName, analysisLabel]
     .filter(Boolean)
     .join(' · ')
 
