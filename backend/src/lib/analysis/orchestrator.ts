@@ -53,7 +53,9 @@ function buildIntent(
     : '数据分析'
 
   // 只有时间已实际确定时才显示，避免「待指定」等占位符出现在摘要里
-  const timeDisplay = timeRange.includes('~') ? timeRange
+  // scalar 查询自动使用「不限时间」，不在摘要中重复展示
+  const timeDisplay = (queryType === 'scalar' && timeRange === '不限时间') ? ''
+    : timeRange.includes('~') ? timeRange
     : timeRange === '不限时间' ? '不限时间'
     : ''
   const summary = [region, timeDisplay, metricName, analysisLabel]
@@ -276,32 +278,40 @@ export async function handleAnalysisEvent(
       return
     }
 
-    const hasResolvedTime = Boolean(session.intent?.timeRange) || Boolean(inferTimeRange(text))
-    const gap = classifyGaps(text, hasResolvedTime)
-
-    if (gap.gapType === 'A' && session.clarifyRound < 2) {
-      session.thinking = false
-      session.phase = 'clarifying'
-      session.gapType = 'A'
-      session.clarifyRound += 1
-      session.chips = chipsForGap(gap.missingAspect)
-      session.context.statusLabel = '澄清中'
-      const q = await maybeLlmClarify(session.userQuery, clarifyingPrompt(gap.missingAspect))
-      await streamAssistantText(emit, session, q)
-      await emit({ type: 'session', session })
-      await emit({ type: 'done' })
-      return
-    }
-
-    const inferred = inferTimeRange(text) || inferTimeRange(session.userQuery)
-    const timeRange = inferred?.timeRange || session.intent?.timeRange || '待指定'
-    const defaultNote = inferred?.defaultNote || session.intent?.defaultNote || ''
-
-    // 用 LLM 语义匹配 View、指标和拆分维度
+    // 先做 LLM 语义匹配，拿到 queryType 后再决定是否需要时间
     const t0 = Date.now()
     console.log(`[analysis] LLM 语义匹配开始 query="${text.slice(0, 60)}"`)
     const llmMatch = await matchViewByLLM(text + ' ' + session.userQuery)
     console.log(`[analysis] LLM 语义匹配完成 ${Date.now() - t0}ms → view=${llmMatch.viewName} queryType=${llmMatch.queryType} measure=${llmMatch.measureShort} breakdown=${llmMatch.breakdownShort}`)
+
+    // scalar 查询（问总量/当前值）不需要用户指定时间段，直接取最新分区
+    const needsTime = llmMatch.queryType !== 'scalar'
+
+    if (needsTime) {
+      const hasResolvedTime = Boolean(session.intent?.timeRange) || Boolean(inferTimeRange(text))
+      const gap = classifyGaps(text, hasResolvedTime)
+
+      if (gap.gapType === 'A' && session.clarifyRound < 2) {
+        session.thinking = false
+        session.phase = 'clarifying'
+        session.gapType = 'A'
+        session.clarifyRound += 1
+        session.chips = chipsForGap(gap.missingAspect)
+        session.context.statusLabel = '澄清中'
+        const q = await maybeLlmClarify(session.userQuery, clarifyingPrompt(gap.missingAspect))
+        await streamAssistantText(emit, session, q)
+        await emit({ type: 'session', session })
+        await emit({ type: 'done' })
+        return
+      }
+    }
+
+    const inferred = inferTimeRange(text) || inferTimeRange(session.userQuery)
+    // scalar 查询：自动使用「不限时间」，取最新分区数据
+    const timeRange = needsTime
+      ? (inferred?.timeRange || session.intent?.timeRange || '待指定')
+      : (inferred?.timeRange || session.intent?.timeRange || '不限时间')
+    const defaultNote = inferred?.defaultNote || session.intent?.defaultNote || ''
 
     session.thinking = false
     session.phase = 'intent_confirm'
