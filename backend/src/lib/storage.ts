@@ -12,8 +12,17 @@ const COLLECTION_DIR_ENV: Record<string, string | undefined> = {
   views: process.env.VIEWS_DATA_DIR,
 }
 
+/** views 用 .yml，其余用 .yaml */
+const COLLECTION_EXT: Record<string, string> = {
+  views: '.yml',
+}
+
 function collectionDir(collection: string): string {
   return COLLECTION_DIR_ENV[collection] ?? join(DATA_ROOT, collection)
+}
+
+function extFor(collection: string): string {
+  return COLLECTION_EXT[collection] ?? '.yaml'
 }
 
 /**
@@ -64,7 +73,7 @@ export async function readAll<T>(collection: string): Promise<T[]> {
  * 先按文件名精确匹配，找不到时扫描所有文件按 name 字段匹配
  */
 export async function readOne<T>(collection: string, id: string): Promise<T | null> {
-  const filePath = join(collectionDir(collection), `${id}.yaml`)
+  const filePath = join(collectionDir(collection), `${id}${extFor(collection)}`)
   try {
     const content = await readFile(filePath, 'utf-8')
     const parsed = yaml.load(content)
@@ -86,7 +95,7 @@ export async function readOne<T>(collection: string, id: string): Promise<T | nu
 export async function write<T>(collection: string, id: string, data: T): Promise<void> {
   const dir = collectionDir(collection)
   await ensureDir(dir)
-  const filePath = join(dir, `${id}.yaml`)
+  const filePath = join(dir, `${id}${extFor(collection)}`)
   const content = yaml.dump(data, { indent: 2, lineWidth: -1 })
   await writeFile(filePath, content, 'utf-8')
 }
@@ -95,7 +104,7 @@ export async function write<T>(collection: string, id: string, data: T): Promise
  * 删除文档（按精确文件名）
  */
 export async function remove(collection: string, id: string): Promise<void> {
-  const filePath = join(collectionDir(collection), `${id}.yaml`)
+  const filePath = join(collectionDir(collection), `${id}${extFor(collection)}`)
   try {
     await rm(filePath)
   } catch { /* 不存在 */ }
@@ -108,7 +117,7 @@ export async function findFileId(collection: string, nameOrId: string): Promise<
   const dir = collectionDir(collection)
   // 精确文件名命中
   try {
-    await readFile(join(dir, `${nameOrId}.yaml`), 'utf-8')
+    await readFile(join(dir, `${nameOrId}${extFor(collection)}`), 'utf-8')
     return nameOrId
   } catch { /* 继续扫描 */ }
   // 扫描所有文件匹配 name 字段
