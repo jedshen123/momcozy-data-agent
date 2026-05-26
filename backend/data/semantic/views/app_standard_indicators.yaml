@@ -71,6 +71,7 @@ views:
     title: APP核心运营指标视图
     description: APP核心运营指标视图
     meta:
+      snapshot: true
       ai_context: |-
         本视图数据来自预聚合表，查询速度最快，口径最准。
         【支持指标】APP用户总数、DAU、WAU、 MAU、 留存用户数、社区用户数、发帖用户数、创作者留存用户数

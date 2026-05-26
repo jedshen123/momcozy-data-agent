@@ -21,6 +21,8 @@ export interface AnalysisQuerySpec {
   timeStart: string
   timeEnd: string
   filters: CubeFilter[]
+  /** 每日快照表：scalar 查询需取最新分区 */
+  snapshot: boolean
 }
 
 function detectBreakdownShort(userQuery: string): string | null {
@@ -119,7 +121,8 @@ export async function buildAnalysisQuerySpec(params: {
       breakdownDimension,
       timeStart: start,
       timeEnd: end,
-      filters
+      filters,
+      snapshot: view.snapshot
     }
   }
 
@@ -138,7 +141,8 @@ export async function buildAnalysisQuerySpec(params: {
     breakdownDimension,
     timeStart: start,
     timeEnd: end,
-    filters
+    filters,
+    snapshot: view.snapshot
   }
 }
 

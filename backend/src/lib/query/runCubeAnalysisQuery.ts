@@ -22,6 +22,26 @@ async function timeDimensionForView(viewName: string): Promise<string> {
   return resolveViewMember(viewName, view.timeDimensionShort, view)
 }
 
+/** 查询 snapshot 视图最新的 busi_date 分区日期，格式 YYYY-MM-DD */
+async function fetchLatestPartitionDate(timeDimension: string): Promise<string | null> {
+  try {
+    const res = await cubeLoad({
+      measures: [],
+      dimensions: [timeDimension],
+      order: { [timeDimension]: 'desc' },
+      limit: 1
+    })
+    const row = (res.data as Array<Record<string, string | null>>)[0]
+    if (!row) return null
+    const raw = row[timeDimension] || ''
+    // Cube 返回的日期可能带时间部分，截取 YYYY-MM-DD
+    return raw.slice(0, 10) || null
+  } catch (err) {
+    console.warn(`[cube] 获取最新分区日期失败: ${err instanceof Error ? err.message : err}`)
+    return null
+  }
+}
+
 export async function runCubeAnalysisQuery(params: {
   metric: MetricRecord
   intent: IntentCard
@@ -39,6 +59,7 @@ export async function runCubeAnalysisQuery(params: {
   let trendRows: QueryRow[] = []
   let breakdownRows: QueryRow[] = []
   const queries: { label: string; query: object }[] = []
+  let effectiveSpec = spec  // snapshot scalar 时会替换为含最新日期的 spec
 
   if (spec.type === 'composite' && spec.compositeMeasures) {
     // 复合指标（比率类）：固定走趋势+分布
@@ -92,8 +113,16 @@ export async function runCubeAnalysisQuery(params: {
     const measure = spec.primaryMeasure!
 
     if (queryType === 'scalar') {
+      // snapshot 视图且未指定时间范围时，先取最新分区日期
+      if (spec.snapshot && !spec.timeStart) {
+        const latestDate = await fetchLatestPartitionDate(spec.timeDimension)
+        if (latestDate) {
+          console.log(`[cube] snapshot scalar 使用最新分区日期 ${latestDate}`)
+          effectiveSpec = { ...spec, timeStart: latestDate, timeEnd: latestDate }
+        }
+      }
       // 单值聚合：只查一个汇总数
-      const scalarQ = buildScalarQuery(spec, measure)
+      const scalarQ = buildScalarQuery(effectiveSpec, measure)
       queries.push({ label: '单值聚合', query: scalarQ })
       const scalarRes = await cubeLoad(scalarQ)
       const row = (scalarRes.data as QueryRow[])[0]
@@ -159,8 +188,8 @@ export async function runCubeAnalysisQuery(params: {
     measureColumn: spec.primaryMeasure || spec.compositeMeasures?.numerator || '',
     timeColumn: spec.timeDimension,
     breakdownDimension: spec.breakdownDimension,
-    timeStart: spec.timeStart,
-    timeEnd: spec.timeEnd,
+    timeStart: effectiveSpec.timeStart,
+    timeEnd: effectiveSpec.timeEnd,
     queryType: spec.queryType,
     cubeQueries: queries.map(q => q.query)
   }

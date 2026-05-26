@@ -12,6 +12,8 @@ export interface ViewCatalogEntry {
   prefixed: boolean
   timeDimensionShort: string
   aiContext?: string
+  /** 每日快照表：scalar 查询需取最新 busi_date 分区，默认 false */
+  snapshot: boolean
 }
 
 let catalogCache: Map<string, ViewCatalogEntry> | null = null
@@ -65,7 +67,8 @@ export async function loadViewCatalog(): Promise<Map<string, ViewCatalogEntry>> 
         primaryJoinPath: joinPath.split('.')[0] || joinPath,
         prefixed,
         timeDimensionShort: pickTimeDimensionShort(allIncludes),
-        aiContext: (v.meta as Record<string, unknown> | undefined)?.ai_context as string | undefined
+        aiContext: (v.meta as Record<string, unknown> | undefined)?.ai_context as string | undefined,
+        snapshot: ((v.meta as Record<string, unknown> | undefined)?.snapshot as boolean | undefined) ?? false
       })
     }
   }
