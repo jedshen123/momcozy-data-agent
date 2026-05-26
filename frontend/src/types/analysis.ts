@@ -45,6 +45,8 @@ export interface ResultPayload {
   series?: Array<{ date: string; value: number }>
   sql?: string
   rowCount?: number
+  /** 发向 Cube Core 的原始查询体，用于调试 */
+  cubeQueries?: unknown[]
 }
 
 export interface ContextSnapshot {

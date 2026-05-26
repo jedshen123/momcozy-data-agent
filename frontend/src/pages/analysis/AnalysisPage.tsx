@@ -556,6 +556,7 @@ function ContextPanel({
   busy: boolean
 }) {
   const ctx = session.context
+  const cubeQueries = session.result?.cubeQueries
   return (
     <div style={{ flex: '35', padding: '1.5rem', backgroundColor: '#f9fafb', overflowY: 'auto' }}>
       <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#6b7280', marginBottom: '1rem', textTransform: 'uppercase' }}>本次分析</h3>
@@ -574,6 +575,37 @@ function ContextPanel({
           <pre style={{ marginTop: '0.5rem', padding: '0.75rem', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '0.5rem', fontSize: '0.7rem', overflow: 'auto', maxHeight: '200px', whiteSpace: 'pre-wrap' }}>
             {ctx.executedSql}
           </pre>
+        </details>
+      )}
+      {cubeQueries && cubeQueries.length > 0 && (
+        <details style={{ marginTop: '0.75rem' }}>
+          <summary style={{ fontSize: '0.8125rem', color: '#2563eb', cursor: 'pointer' }}>
+            查看 Cube 请求参数（{cubeQueries.length} 个查询）
+          </summary>
+          {cubeQueries.map((q, i) => (
+            <pre
+              key={i}
+              style={{
+                marginTop: '0.5rem',
+                padding: '0.75rem',
+                background: '#fff',
+                border: '1px solid #e5e7eb',
+                borderRadius: '0.5rem',
+                fontSize: '0.7rem',
+                overflow: 'auto',
+                maxHeight: '260px',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all'
+              }}
+            >
+              {cubeQueries.length > 1 && (
+                <span style={{ display: 'block', color: '#9ca3af', marginBottom: '0.35rem' }}>
+                  # 查询 {i + 1}
+                </span>
+              )}
+              {JSON.stringify(q, null, 2)}
+            </pre>
+          ))}
         </details>
       )}
       <button type="button" style={{ ...btn(), marginTop: '1.5rem', width: '100%' }} disabled={busy} onClick={onNewChat}>

@@ -100,6 +100,7 @@ export function formatAnalysisResult(params: {
     breakdown,
     series: series.length > 0 ? series : undefined,
     sql: plan.displaySql,
-    rowCount: trendRows.length + breakdownRows.length
+    rowCount: trendRows.length + breakdownRows.length,
+    cubeQueries: plan.cubeQueries
   }
 }

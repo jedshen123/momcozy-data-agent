@@ -195,7 +195,8 @@ async function runExecuting(
       breakdown: output.breakdown,
       series: output.series,
       sql: output.sql,
-      rowCount: output.rowCount
+      rowCount: output.rowCount,
+      cubeQueries: output.cubeQueries
     }
     pushTurn(session, 'assistant', '分析完成。\n\n' + output.summary)
   } catch (err) {
