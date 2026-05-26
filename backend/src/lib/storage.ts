@@ -12,17 +12,12 @@ const COLLECTION_DIR_ENV: Record<string, string | undefined> = {
   views: process.env.VIEWS_DATA_DIR,
 }
 
-/** views 用 .yml，其余用 .yaml */
-const COLLECTION_EXT: Record<string, string> = {
-  views: '.yml',
-}
-
 function collectionDir(collection: string): string {
   return COLLECTION_DIR_ENV[collection] ?? join(DATA_ROOT, collection)
 }
 
-function extFor(collection: string): string {
-  return COLLECTION_EXT[collection] ?? '.yaml'
+function extFor(_collection: string): string {
+  return '.yml'
 }
 
 /**
