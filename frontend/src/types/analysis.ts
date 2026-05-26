@@ -35,7 +35,7 @@ export interface CapabilityGapPayload {
   recordedNote: string
 }
 
-export type ChartType = 'line' | 'bar' | 'bar_vertical' | 'scalar'
+export type ChartType = 'line' | 'bar' | 'bar_vertical' | 'scalar' | 'pie'
 
 export interface ResultPayload {
   summary: string

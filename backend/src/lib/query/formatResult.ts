@@ -54,14 +54,16 @@ export function formatAnalysisResult(params: {
   if (queryType === 'scalar') {
     chartType = 'scalar'
   } else if (queryType === 'breakdown') {
-    chartType = 'bar'
+    chartType = 'pie'
   } else if (queryType === 'trend') {
     chartType = 'line'
   } else {
     chartType = series.length > 0 ? 'line' : 'bar'
   }
 
-  const timeLabel = `${plan.timeStart} ~ ${plan.timeEnd}`
+  const timeLabel = (plan.timeStart && plan.timeEnd)
+    ? `${plan.timeStart} ~ ${plan.timeEnd}`
+    : (plan.timeStart || plan.timeEnd || '不限时间')
   const regionLabel = region ? `${region}` : ''
   const top = breakdownRaw[0]
   const avgDaily = series.length ? series.reduce((a, b) => a + b.value, 0) / series.length : 0

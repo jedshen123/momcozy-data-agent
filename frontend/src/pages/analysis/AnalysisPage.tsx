@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import {
   LineChart, Line, BarChart, Bar,
+  PieChart, Pie,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList
 } from 'recharts'
 import type { AnalysisSession, ClientEvent, IntentCard } from '../../types/analysis'
@@ -488,6 +489,46 @@ function ResultBlock({
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* 分布饼图 */}
+      {chartType === 'pie' && breakdownData.length > 0 && (
+        <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '2rem', flexWrap: 'wrap' }}>
+          <ResponsiveContainer width={240} height={240}>
+            <PieChart>
+              <Pie
+                data={breakdownData}
+                dataKey="value"
+                nameKey="label"
+                cx="50%"
+                cy="50%"
+                outerRadius={100}
+                innerRadius={48}
+                paddingAngle={2}
+              >
+                {breakdownData.map((_, i) => (
+                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(v: unknown, _name: unknown, props: { payload?: { display?: string } }) =>
+                  [props?.payload?.display ?? formatVal(Number(v)), '']
+                }
+                contentStyle={{ fontSize: '0.8125rem', borderRadius: '0.5rem', border: '1px solid #e5e7eb' }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            {breakdownData.slice(0, 10).map((b, i) => (
+              <div key={b.label} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8125rem', marginBottom: '0.5rem' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: COLORS[i % COLORS.length], flexShrink: 0 }} />
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#374151' }}>{b.label}</span>
+                <span style={{ color: '#6b7280', marginLeft: '0.5rem' }}>{b.display}</span>
+                <span style={{ color: '#9ca3af', minWidth: '2.5rem', textAlign: 'right' }}>{Math.round((b.value / totalBreak) * 100)}%</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

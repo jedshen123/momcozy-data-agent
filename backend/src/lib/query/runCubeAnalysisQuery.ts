@@ -130,8 +130,16 @@ export async function runCubeAnalysisQuery(params: {
       breakdownRows = [{ dim_label: '合计', metric_value: val }]
       trendRows = []
     } else if (queryType === 'breakdown') {
+      // snapshot 视图且未指定时间范围时，先取最新分区日期
+      if (spec.snapshot && !spec.timeStart) {
+        const latestDate = await fetchLatestPartitionDate(spec.timeDimension)
+        if (latestDate) {
+          console.log(`[cube] snapshot breakdown 使用最新分区日期 ${latestDate}`)
+          effectiveSpec = { ...spec, timeStart: latestDate, timeEnd: latestDate }
+        }
+      }
       // 纯分布：只执行分布查询
-      const distQ = buildDistributionQuery(spec, measure)
+      const distQ = buildDistributionQuery(effectiveSpec, measure)
       queries.push({ label: '分布', query: distQ })
       const distRes = await cubeLoad(distQ)
       breakdownRows = spec.breakdownDimension
