@@ -253,45 +253,67 @@ export async function matchViewByLLM(userQuery: string): Promise<LLMViewMatch> {
 
   // 加载 cube 维度/度量元数据，构建 cubeName → {shortName → {title, aiContext}} 映射
   const { cubes } = await loadSemanticCatalog()
-  // 合并 dimensions + measures 的 title 元数据
+  // 合并 dimensions + measures 的 title 元数据，同时记录哪些是 measure
   const cubeMemberMeta = new Map<string, Map<string, { title?: string; aiContext?: string }>>()
+  const cubeMeasureNames = new Map<string, Set<string>>()
   for (const [cubeName, cubeDef] of cubes) {
     const memberMap = new Map<string, { title?: string; aiContext?: string }>()
+    const mNames = new Set<string>()
     for (const d of cubeDef.dimensions) {
       memberMap.set(d.name, { title: d.title, aiContext: d.aiContext })
     }
     for (const m of cubeDef.measures) {
       memberMap.set(m.name, { title: m.title })
+      mNames.add(m.name)
     }
     cubeMemberMeta.set(cubeName, memberMap)
+    cubeMeasureNames.set(cubeName, mNames)
   }
 
-  // 构建 views 描述（重点突出 ai_context + 维度元数据）
+  // 构建 views 描述（measures 和 dimensions 分开列出，方便 LLM 准确选取指标）
   const viewsDesc = views.map(v => {
     const explicitMembers = [...v.includes].filter(m => m !== '*')
 
-    // 为该 view 下所有维度拼出描述
-    const dimDescLines: string[] = []
+    // 按 cube 定义区分 measures 和 dimensions
+    const measureMembers: string[] = []
+    const dimensionMembers: string[] = []
+    for (const memberShort of explicitMembers) {
+      let isMeasure = false
+      for (const cubeName of v.cubeNames) {
+        if (cubeMeasureNames.get(cubeName)?.has(memberShort)) {
+          isMeasure = true
+          break
+        }
+      }
+      if (isMeasure) {
+        measureMembers.push(memberShort)
+      } else {
+        dimensionMembers.push(memberShort)
+      }
+    }
+
+    // 为成员拼出元数据描述行
+    const memberDescLines: string[] = []
     for (const memberShort of explicitMembers) {
       for (const cubeName of v.cubeNames) {
         const meta = cubeMemberMeta.get(cubeName)?.get(memberShort)
         if (meta?.title || meta?.aiContext) {
           const desc = [meta.title, meta.aiContext].filter(Boolean).join('；')
-          dimDescLines.push(`    - ${memberShort}: ${desc}`)
+          memberDescLines.push(`    - ${memberShort}: ${desc}`)
           break
         }
       }
     }
 
-    const membersStr = explicitMembers.length
-      ? explicitMembers.join(', ')
-      : '（成员见 Cube meta，包含 view 下全部字段）'
+    const measuresStr = measureMembers.length ? measureMembers.join(', ') : '（无明确 measure 列表）'
+    const dimensionsStr = dimensionMembers.length ? dimensionMembers.join(', ') : '（无明确 dimension 列表）'
     return [
       `name: ${v.name}`,
       v.title ? `title: ${v.title}` : null,
       v.aiContext ? `ai_context: ${v.aiContext}` : null,
-      `includes: ${membersStr}`,
-      dimDescLines.length ? `dimension_meta:\n${dimDescLines.join('\n')}` : null
+      `measures: ${measuresStr}`,
+      `dimensions: ${dimensionsStr}`,
+      memberDescLines.length ? `member_meta:\n${memberDescLines.join('\n')}` : null
     ].filter(Boolean).join('\n  ')
   }).map(s => `- ${s}`).join('\n\n')
 
@@ -308,13 +330,17 @@ ${viewsDesc}
 - "breakdown"：用户问分布、各个X的Y、按X分组，只需要按维度聚合，不需要时间序列
 - "trend_breakdown"：用户同时关心趋势和分布（默认）
 
-选择依据：优先参考每个 View 的 ai_context 字段来判断语义匹配程度；includes 字段列出了 View 可用的成员名，measureShort 和 breakdownShort 必须从对应 View 的 includes 中选取。
+选择依据：优先参考每个 View 的 ai_context 字段来判断语义匹配程度；每个 View 已按类型列出 measures（度量指标）和 dimensions（维度）。
+
+重要约束：
+- measureShort 必须从该 View 的 measures 列表中选取，不能选 dimensions 中的成员
+- breakdownShort 必须从该 View 的 dimensions 列表中选取，不能选 measures 中的成员
+- filterConditions 中的 dimension 必须来自该 View 的 dimensions 列表
 
 filterConditions 提取规则：
 - 仔细分析用户问题中的限定条件（产品型号、状态标志、地区、渠道等），将其转为维度过滤
-- dimension 必须是该 view 的 includes 中的成员名
 - operator 可选值：equals / contains / gt / lt / gte / lte
-- 参考 dimension_meta 中的描述来理解维度含义和可选值
+- 参考 member_meta 中的描述来理解维度含义和可选值
 - 如果没有额外限定条件则 filterConditions 为空数组
 
 请只输出 JSON 数组，不要 markdown 代码块，不要多余文字：
@@ -322,10 +348,10 @@ filterConditions 提取规则：
   {
     "viewName": "匹配度最高的 view name（必须是上方列表中的 name 之一）",
     "queryType": "scalar | trend | breakdown | trend_breakdown",
-    "measureShort": "用户想查的指标短名（必须来自该 view 的 includes）",
-    "breakdownShort": "拆分维度短名（必须来自该 view 的 includes；queryType为trend/scalar时填null；无拆分需求也填null）",
+    "measureShort": "用户想查的指标短名（必须来自该 view 的 measures 列表）",
+    "breakdownShort": "拆分维度短名（必须来自该 view 的 dimensions 列表；queryType为trend/scalar时填null；无拆分需求也填null）",
     "filterConditions": [
-      {"dimension": "维度短名（必须来自该 view 的 includes）", "operator": "equals", "values": ["过滤值"]}
+      {"dimension": "维度短名（必须来自该 view 的 dimensions 列表）", "operator": "equals", "values": ["过滤值"]}
     ]
   }
 ]`

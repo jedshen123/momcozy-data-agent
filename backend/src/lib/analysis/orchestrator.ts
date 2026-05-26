@@ -54,7 +54,7 @@ function buildIntent(
 
   // 只有时间已实际确定时才显示，避免「待指定」等占位符出现在摘要里
   const timeDisplay = timeRange.includes('~') ? timeRange
-    : timeRange === '全部时间' ? '全部时间'
+    : timeRange === '不限时间' ? '不限时间'
     : ''
   const summary = [region, timeDisplay, metricName, analysisLabel]
     .filter(Boolean)
