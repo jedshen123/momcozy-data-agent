@@ -263,6 +263,7 @@ export async function handleAnalysisEvent(
     } : undefined
 
     if (session.phase === 'result' || session.phase === 'deposition') {
+      session.result = undefined
       session.steps = undefined
       session.depositionPrefill = undefined
     }

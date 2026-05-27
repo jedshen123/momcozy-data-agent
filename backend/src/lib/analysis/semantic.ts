@@ -394,9 +394,18 @@ breakdownShort 选取规则：
     let raw = ''
     for await (const token of streamChat([{ role: 'user', content: prompt }])) {
       raw += token
-      // 流式转发思考文字（<JSON> 标记前的部分）
-      if (onThinkingToken && !raw.includes('<JSON>')) {
-        onThinkingToken(token)
+      // 只转发 <JSON> 标记之前的思考内容
+      if (onThinkingToken) {
+        const jsonStart = raw.indexOf('<JSON>')
+        if (jsonStart === -1) {
+          onThinkingToken(token)
+        } else {
+          // 刚刚越过 <JSON>，把边界前还未发送的部分补发一次
+          const alreadySent = raw.length - token.length
+          if (alreadySent < jsonStart) {
+            onThinkingToken(raw.slice(alreadySent, jsonStart))
+          }
+        }
       }
     }
     console.log(`[llm] matchViewByLLM 完成 ${Date.now() - t0}ms`)

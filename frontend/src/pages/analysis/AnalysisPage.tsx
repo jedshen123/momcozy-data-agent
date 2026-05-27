@@ -101,6 +101,7 @@ export default function AnalysisPage() {
             setSession(ev.session)
 
             // 当 phase 首次切到 result 且有 result 时，捕获一次
+            // 后端在新轮 user_message 时已清空 session.result，不会带入旧值
             if (ev.session.phase === 'result' && ev.session.result && !resultCaptured) {
               resultCaptured = true
               // 找最后一条 assistant turn 的 index
