@@ -232,13 +232,22 @@ function enrichWithTitle(
   return candidate
 }
 
+export interface PrevIntentContext {
+  measureShort?: string
+  breakdownShort?: string | null
+  queryType?: string
+  filterConditions?: Array<{ dimension: string; operator: string; values: string[] }>
+  timeRange?: string
+  viewName?: string
+}
+
 /**
  * 用 LLM 语义理解用户问题，从 viewCatalog 中选出最合适的 View，
  * 并推断用户想查的指标短名、拆分维度短名和查询类型。
  * LLM 返回有序候选列表（最多3个），后端按顺序做 includes 成员校验，
  * 取第一个通过校验的候选，消除对 ai_context 文案精准度的依赖。
  */
-export async function matchViewByLLM(userQuery: string): Promise<LLMViewMatch> {
+export async function matchViewByLLM(userQuery: string, prevIntent?: PrevIntentContext): Promise<LLMViewMatch> {
   const catalog = await loadViewCatalog()
   const views = [...catalog.values()]
 
@@ -318,8 +327,20 @@ export async function matchViewByLLM(userQuery: string): Promise<LLMViewMatch> {
     ].filter(Boolean).join('\n  ')
   }).map(s => `- ${s}`).join('\n\n')
 
-  const prompt = `你是数据仓库查询助手。根据用户问题，从下方可用 Views 中按匹配度从高到低选出最多3个候选，推断每个候选所需的指标、拆分维度、查询类型，以及需要过滤的维度条件。
+  const prevIntentSection = prevIntent ? `
+上一轮意图（供参考，用户新问题可能是在此基础上修改）：
+- View：${prevIntent.viewName || '无'}
+- 指标：${prevIntent.measureShort || '无'}
+- 查询类型：${prevIntent.queryType || '无'}
+- 过滤条件：${prevIntent.filterConditions?.length ? JSON.stringify(prevIntent.filterConditions) : '无'}
+- 时间范围：${prevIntent.timeRange || '无'}
 
+如果用户新问题是追问（如只改了某个 filter 值、只换了产品型号等），请继承上一轮的 view/measure/queryType，只更新变化的部分。
+
+` : ''
+
+  const prompt = `你是数据仓库查询助手。根据用户问题，从下方可用 Views 中按匹配度从高到低选出最多3个候选，推断每个候选所需的指标、拆分维度、查询类型，以及需要过滤的维度条件。
+${prevIntentSection}
 用户问题：${userQuery}
 
 可用 Views：

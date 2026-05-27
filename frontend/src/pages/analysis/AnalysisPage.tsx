@@ -33,6 +33,13 @@ const chipStyle: React.CSSProperties = {
   fontSize: '0.8125rem'
 }
 
+import type { ResultPayload } from '../../types/analysis'
+
+interface HistoryEntry {
+  result: ResultPayload
+  turnIndex: number
+}
+
 export default function AnalysisPage() {
   const [session, setSession] = useState<AnalysisSession>(emptySession())
   const [input, setInput] = useState('')
@@ -40,6 +47,7 @@ export default function AnalysisPage() {
   const [error, setError] = useState<string | null>(null)
   const [depositionConclusion, setDepositionConclusion] = useState('')
   const [editIntent, setEditIntent] = useState<IntentCard | null>(null)
+  const [resultHistory, setResultHistory] = useState<HistoryEntry[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -58,10 +66,24 @@ export default function AnalysisPage() {
     }
   }, [session.intent, session.intentEditing])
 
+  // 每当 phase 切到 result 且有新结果时，追加到历史（避免重复追加）
+  useEffect(() => {
+    if (session.phase === 'result' && session.result) {
+      const turnIndex = session.turns.length
+      setResultHistory(prev => {
+        const last = prev[prev.length - 1]
+        if (last?.result === session.result) return prev
+        return [...prev, { result: session.result!, turnIndex }]
+      })
+    }
+  }, [session.phase, session.result, session.turns.length])
+
   async function runEvent(event: ClientEvent) {
     if (busy) return
     setError(null)
     setBusy(true)
+    // 新建对话时清空历史
+    if (event.type === 'new_conversation') setResultHistory([])
     let local = session
 
     try {
@@ -188,6 +210,11 @@ export default function AnalysisPage() {
           )}
 
           {session.phase === 'executing' && session.steps && <ExecutionLog steps={session.steps} />}
+
+          {/* 历史结果卡片（只读，保留之前轮次的图表） */}
+          {resultHistory.slice(0, session.phase === 'result' ? -1 : undefined).map((entry, i) => (
+            <ResultBlock key={i} result={entry.result} busy={false} readonly />
+          ))}
 
           {session.phase === 'result' && session.result && (
             <ResultBlock
@@ -366,15 +393,17 @@ function ExecutionLog({ steps }: { steps: NonNullable<AnalysisSession['steps']> 
 function ResultBlock({
   result,
   busy,
+  readonly,
   onOk,
   onDeep,
   onReframe
 }: {
   result: NonNullable<AnalysisSession['result']>
   busy: boolean
-  onOk: () => void
-  onDeep: () => void
-  onReframe: () => void
+  readonly?: boolean
+  onOk?: () => void
+  onDeep?: () => void
+  onReframe?: () => void
 }) {
   const chartType = result.chartType ?? (result.series && result.series.length > 0 ? 'line' : 'bar')
   const COLORS = ['#2563eb', '#7c3aed', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed', '#be185d', '#0284c7', '#16a34a']
@@ -557,12 +586,16 @@ function ResultBlock({
         {result.summary}
       </p>
 
-      <p style={{ fontSize: '0.8125rem', color: '#6b7280', marginBottom: '0.75rem' }}>结果符合预期吗？</p>
-      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-        <button type="button" style={btn(true)} disabled={busy} onClick={onOk}>✅ 符合</button>
-        <button type="button" style={btn()} disabled={busy} onClick={onDeep}>🔄 深入分析</button>
-        <button type="button" style={btn()} disabled={busy} onClick={onReframe}>✏ 换个角度</button>
-      </div>
+      {!readonly && (
+        <>
+          <p style={{ fontSize: '0.8125rem', color: '#6b7280', marginBottom: '0.75rem' }}>结果符合预期吗？</p>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button type="button" style={btn(true)} disabled={busy} onClick={onOk}>✅ 符合</button>
+            <button type="button" style={btn()} disabled={busy} onClick={onDeep}>🔄 深入分析</button>
+            <button type="button" style={btn()} disabled={busy} onClick={onReframe}>✏ 换个角度</button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

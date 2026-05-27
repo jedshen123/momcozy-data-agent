@@ -12,6 +12,7 @@ import {
   matchDisambiguation,
   matchExperience,
   matchViewByLLM,
+  type PrevIntentContext,
 } from './semantic.js'
 import type { SseWriter } from './sse.js'
 import type {
@@ -249,8 +250,19 @@ export async function handleAnalysisEvent(
     const text = event.text.trim()
     if (!text) return
 
+    // 保存上一轮 intent 供多轮上下文传递；result 由前端 resultHistory 保留，此处不清空
+    const prevIntent: PrevIntentContext | undefined = session.intent ? {
+      measureShort: session.intent.measureShort,
+      breakdownShort: session.intent.breakdownShort,
+      queryType: session.intent.queryType,
+      filterConditions: session.intent.filterConditions?.map(f => ({
+        dimension: f.dimension, operator: f.operator, values: f.values
+      })),
+      timeRange: session.intent.timeRange,
+      viewName: session.intent.view,
+    } : undefined
+
     if (session.phase === 'result' || session.phase === 'deposition') {
-      session.result = undefined
       session.steps = undefined
       session.depositionPrefill = undefined
     }
@@ -286,7 +298,7 @@ export async function handleAnalysisEvent(
     // 先做 LLM 语义匹配，拿到 queryType 后再决定是否需要时间
     const t0 = Date.now()
     console.log(`[analysis] LLM 语义匹配开始 query="${text.slice(0, 60)}"`)
-    const llmMatch = await matchViewByLLM(text + ' ' + session.userQuery)
+    const llmMatch = await matchViewByLLM(text + ' ' + session.userQuery, prevIntent)
     console.log(`[analysis] LLM 语义匹配完成 ${Date.now() - t0}ms → view=${llmMatch.viewName} queryType=${llmMatch.queryType} measure=${llmMatch.measureShort} breakdown=${llmMatch.breakdownShort}`)
 
     // 回填维度中文标题（失败静默）
