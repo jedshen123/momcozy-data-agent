@@ -37,6 +37,13 @@ import type { ResultPayload } from '../../types/analysis'
 
 interface HistoryEntry {
   result: ResultPayload
+  /** 对应的最后一条 assistant turn 的 index（在 session.turns 中） */
+  turnIndex: number
+}
+
+interface ThinkingEntry {
+  text: string
+  /** 对应的 user turn index */
   turnIndex: number
 }
 
@@ -47,7 +54,11 @@ export default function AnalysisPage() {
   const [error, setError] = useState<string | null>(null)
   const [depositionConclusion, setDepositionConclusion] = useState('')
   const [editIntent, setEditIntent] = useState<IntentCard | null>(null)
+  // resultHistory：每轮查询结果，按 turnIndex 锚定到对应 assistant turn
   const [resultHistory, setResultHistory] = useState<HistoryEntry[]>([])
+  // thinkingHistory：每轮 LLM 思考过程，按 user turn index 锚定
+  const [thinkingHistory, setThinkingHistory] = useState<ThinkingEntry[]>([])
+  const pendingThinkingRef = useRef('')
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -66,26 +77,19 @@ export default function AnalysisPage() {
     }
   }, [session.intent, session.intentEditing])
 
-  // 每当 phase 切到 result 且有新结果时，追加到历史（避免重复追加）
-  useEffect(() => {
-    if (session.phase === 'result' && session.result) {
-      // turnIndex 记录此刻 turns 长度，渲染时在最后一条 turn 之后插入
-      const turnIndex = session.turns.length
-      setResultHistory(prev => {
-        const last = prev[prev.length - 1]
-        if (last?.result === session.result) return prev
-        return [...prev, { result: session.result!, turnIndex }]
-      })
-    }
-  }, [session.phase, session.result, session.turns.length])
-
   async function runEvent(event: ClientEvent) {
     if (busy) return
     setError(null)
     setBusy(true)
-    // 新建对话时清空历史
-    if (event.type === 'new_conversation') setResultHistory([])
+    if (event.type === 'new_conversation') {
+      setResultHistory([])
+      setThinkingHistory([])
+      pendingThinkingRef.current = ''
+    }
     let local = session
+    // 记录本轮 user turn 的 index（发消息前 turns 长度即为新 user turn 的 index）
+    const userTurnIndex = event.type === 'user_message' ? session.turns.length : -1
+    let resultCaptured = false
 
     try {
       await dispatchAnalysisEvent(
@@ -95,6 +99,30 @@ export default function AnalysisPage() {
           if (ev.type === 'session') {
             local = ev.session
             setSession(ev.session)
+
+            // 当 phase 首次切到 result 且有 result 时，捕获一次
+            if (ev.session.phase === 'result' && ev.session.result && !resultCaptured) {
+              resultCaptured = true
+              // 找最后一条 assistant turn 的 index
+              const turns = ev.session.turns
+              let assistantIdx = turns.length - 1
+              while (assistantIdx >= 0 && turns[assistantIdx].role !== 'assistant') assistantIdx--
+              setResultHistory(prev => {
+                const last = prev[prev.length - 1]
+                if (last?.result === ev.session.result) return prev
+                return [...prev, { result: ev.session.result!, turnIndex: assistantIdx }]
+              })
+            }
+
+            // 思考结束时（thinking 从 true 变 false），保存本轮 thinkingText
+            if (!ev.session.thinking && pendingThinkingRef.current && userTurnIndex >= 0) {
+              const text = pendingThinkingRef.current
+              pendingThinkingRef.current = ''
+              setThinkingHistory(prev => {
+                if (prev.some(t => t.turnIndex === userTurnIndex)) return prev
+                return [...prev, { text, turnIndex: userTurnIndex }]
+              })
+            }
           }
           if (ev.type === 'token') {
             setSession(prev => {
@@ -107,6 +135,7 @@ export default function AnalysisPage() {
             })
           }
           if (ev.type === 'thinking_token') {
+            pendingThinkingRef.current += ev.content
             setSession(prev => ({
               ...prev,
               thinkingText: (prev.thinkingText || '') + ev.content
@@ -182,17 +211,44 @@ export default function AnalysisPage() {
                   {msg.content || (busy && i === session.turns.length - 1 && msg.role === 'assistant' ? '▌' : '')}
                 </div>
               </div>
-              {/* 在对应 turn 之后插入历史结果卡片（只读） */}
-              {resultHistory
-                .filter(e => e.turnIndex === i + 1 && !(session.phase === 'result' && e === resultHistory[resultHistory.length - 1]))
-                .map((entry, j) => (
-                  <ResultBlock key={`hist-${i}-${j}`} result={entry.result} busy={false} readonly />
+
+              {/* user turn 后：渲染对应的折叠思考过程 */}
+              {msg.role === 'user' && thinkingHistory
+                .filter(t => t.turnIndex === i)
+                .map((t, j) => (
+                  <details key={`think-${i}-${j}`} style={{ marginBottom: '0.75rem', marginLeft: '0.5rem' }}>
+                    <summary style={{ fontSize: '0.8rem', color: '#9ca3af', cursor: 'pointer', userSelect: 'none', listStyle: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <span style={{ fontSize: '0.7rem' }}>▶</span> AI 思考过程
+                    </summary>
+                    <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '0.5rem', fontSize: '0.8125rem', color: '#6b7280', fontStyle: 'italic', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                      {t.text}
+                    </div>
+                  </details>
                 ))
+              }
+
+              {/* assistant turn 后：渲染锚定到该 turn 的结果卡片 */}
+              {msg.role === 'assistant' && resultHistory
+                .map((entry, idx) => ({ entry, idx }))
+                .filter(({ entry }) => entry.turnIndex === i)
+                .map(({ entry, idx }) => {
+                  const isLatest = idx === resultHistory.length - 1
+                  return isLatest && session.phase === 'result'
+                    ? <ResultBlock
+                        key={`res-${idx}`}
+                        result={entry.result}
+                        busy={busy}
+                        onOk={() => runEvent({ type: 'feedback_ok' })}
+                        onDeep={() => runEvent({ type: 'feedback_deep' })}
+                        onReframe={() => runEvent({ type: 'feedback_reframe' })}
+                      />
+                    : <ResultBlock key={`res-${idx}`} result={entry.result} busy={false} readonly />
+                })
               }
             </div>
           ))}
 
-          {/* AI 思考中：显示流式思考文字或动画 */}
+          {/* AI 思考中：流式思考文字（进行中） */}
           {session.thinking && (
             <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '1rem', gap: '0.5rem' }}>
               <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
@@ -228,16 +284,6 @@ export default function AnalysisPage() {
           )}
 
           {session.phase === 'executing' && session.steps && <ExecutionLog steps={session.steps} />}
-
-          {session.phase === 'result' && session.result && (
-            <ResultBlock
-              result={session.result}
-              busy={busy}
-              onOk={() => runEvent({ type: 'feedback_ok' })}
-              onDeep={() => runEvent({ type: 'feedback_deep' })}
-              onReframe={() => runEvent({ type: 'feedback_reframe' })}
-            />
-          )}
 
           {session.phase === 'capability_gap' && (
             <div style={{ margin: '1rem 0', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
