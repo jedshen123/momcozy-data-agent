@@ -58,6 +58,8 @@ export default function AnalysisPage() {
   const [resultHistory, setResultHistory] = useState<HistoryEntry[]>([])
   // thinkingHistory：每轮 LLM 思考过程，按 user turn index 锚定
   const [thinkingHistory, setThinkingHistory] = useState<ThinkingEntry[]>([])
+  // 当前轮次正在流式输出的思考文字（每轮开始时清零，不复用上轮内容）
+  const [currentThinkingText, setCurrentThinkingText] = useState('')
   const pendingThinkingRef = useRef('')
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -84,6 +86,11 @@ export default function AnalysisPage() {
     if (event.type === 'new_conversation') {
       setResultHistory([])
       setThinkingHistory([])
+      pendingThinkingRef.current = ''
+      setCurrentThinkingText('')
+    }
+    if (event.type === 'user_message') {
+      setCurrentThinkingText('')
       pendingThinkingRef.current = ''
     }
     let local = session
@@ -137,7 +144,7 @@ export default function AnalysisPage() {
           }
           if (ev.type === 'thinking_token') {
             pendingThinkingRef.current += ev.content
-            setSession(prev => ({ ...prev, thinkingText: (prev.thinkingText || '') + ev.content }))
+            setCurrentThinkingText(prev => prev + ev.content)
           }
           if (ev.type === 'error') setError(ev.message)
         }
@@ -253,8 +260,8 @@ export default function AnalysisPage() {
                 <span style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 700 }}>AI</span>
               </div>
               <div style={{ padding: '0.75rem 1rem', background: '#f3f4f6', borderRadius: '1rem 1rem 1rem 0.25rem', maxWidth: '85%', minWidth: 120 }}>
-                {session.thinkingText
-                  ? <div style={{ fontSize: '0.8125rem', color: '#6b7280', fontStyle: 'italic', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6 }}>{session.thinkingText}</div>
+                {currentThinkingText
+                  ? <div style={{ fontSize: '0.8125rem', color: '#6b7280', fontStyle: 'italic', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6 }}>{currentThinkingText}</div>
                   : <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><ThinkingDots /></div>
                 }
               </div>
