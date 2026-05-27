@@ -48,15 +48,27 @@ export interface CapabilityGapPayload {
   recordedNote: string
 }
 
+export type ChartType = 'line' | 'bar' | 'bar_vertical' | 'scalar' | 'pie' | 'line_multi'
+
 export interface ResultPayload {
   summary: string
   chartTitle: string
-  breakdown: Array<{ label: string; value: string; width: string }>
+  chartType?: ChartType
+  breakdown: Array<{ label: string; value: string; width: string; raw?: number }>
   series?: Array<{ date: string; value: number }>
+  /** 多系列对比（chartType=line_multi 时使用） */
+  multiSeries?: Array<{ name: string; color: string; data: Array<{ date: string; value: number }> }>
   sql?: string
   rowCount?: number
   /** 发向 Cube Core 的原始查询体，用于调试 */
   cubeQueries?: unknown[]
+}
+
+/** 历史查询结果条目（用于多轮对比） */
+export interface ResultHistoryEntry {
+  /** 本轮查询对应的用户问题（冗余一份，便于 LLM / 对比逻辑识别） */
+  label: string
+  result: ResultPayload
 }
 
 export interface ContextSnapshot {
@@ -94,6 +106,8 @@ export interface AnalysisSession {
   steps?: ExecutionStep[]
   capabilityGap?: CapabilityGapPayload
   result?: ResultPayload
+  /** 历史查询结果，用于多轮对比（前后端共同维护） */
+  resultHistory?: ResultHistoryEntry[]
   depositionPrefill?: DepositionPrefill
   context: ContextSnapshot
   /** 累积的用户原始问题（首问） */

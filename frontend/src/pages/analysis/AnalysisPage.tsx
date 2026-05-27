@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import {
   LineChart, Line, BarChart, Bar,
   PieChart, Pie,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LabelList
 } from 'recharts'
 import type { AnalysisSession, ClientEvent, IntentCard } from '../../types/analysis'
 import { emptySession } from '../../types/analysis'
@@ -491,6 +491,53 @@ function ResultBlock({
           <div style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>
             {result.chartTitle.split('（')[0]}
           </div>
+        </div>
+      )}
+
+      {/* 多系列对比折线图 */}
+      {chartType === 'line_multi' && result.multiSeries && result.multiSeries.length > 0 && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+              <XAxis
+                dataKey="date"
+                type="category"
+                allowDuplicatedCategory={false}
+                tickFormatter={formatDate}
+                tick={{ fontSize: 11, fill: '#9ca3af' }}
+                axisLine={false}
+                tickLine={false}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                tickFormatter={formatVal}
+                tick={{ fontSize: 11, fill: '#9ca3af' }}
+                axisLine={false}
+                tickLine={false}
+                width={56}
+              />
+              <Tooltip
+                formatter={(v: unknown, name: unknown) => [formatVal(Number(v)), String(name)]}
+                labelFormatter={(l: unknown) => String(l)}
+                contentStyle={{ fontSize: '0.8125rem', borderRadius: '0.5rem', border: '1px solid #e5e7eb' }}
+              />
+              <Legend wrapperStyle={{ fontSize: '0.8125rem' }} />
+              {result.multiSeries.map(s => (
+                <Line
+                  key={s.name}
+                  data={s.data}
+                  type="monotone"
+                  dataKey="value"
+                  name={s.name}
+                  stroke={s.color}
+                  strokeWidth={2}
+                  dot={s.data.length <= 30 ? { r: 3, fill: s.color } : false}
+                  activeDot={{ r: 5 }}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       )}
 

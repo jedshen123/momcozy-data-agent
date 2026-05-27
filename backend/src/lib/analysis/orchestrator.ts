@@ -20,7 +20,8 @@ import type {
   ClientEvent,
   ExecutionStep,
   IntentCard,
-  QueryType
+  QueryType,
+  ResultHistoryEntry
 } from './types.js'
 import { emptySession } from './types.js'
 import { runAnalysisQuery } from '../query/runAnalysisQuery.js'
@@ -212,6 +213,12 @@ async function runExecuting(
       rowCount: output.rowCount,
       cubeQueries: output.cubeQueries
     }
+    // 把本轮结果追加到 resultHistory，供后续对比使用
+    const historyLabel = session.intent.filterConditions?.length
+      ? session.intent.filterConditions.map(f => f.values.join('/')).join('·')
+      : (session.intent.metric || session.intent.measureShort || '本轮')
+    const entry: ResultHistoryEntry = { label: historyLabel, result: session.result! }
+    session.resultHistory = [...(session.resultHistory ?? []), entry]
     pushTurn(session, 'assistant', '分析完成。\n\n' + output.summary)
   } catch (err) {
     const msg = err instanceof Error ? err.message : '查询失败'
@@ -230,6 +237,60 @@ async function runExecuting(
 
   console.log(`[analysis] 执行完成 总耗时 ${Date.now() - tExec}ms`)
   await emit({ type: 'session', session: { ...session } })
+}
+
+const COMPARE_PATTERN = /对比|比较|一起看|放一起|叠加|同图|合并/
+
+/**
+ * 检测"对比已有数据"意图：用户问"对比它们"/"比较两个"时，
+ * 若 session.resultHistory 已有 ≥2 条趋势数据，直接合并出图，无需重新查询。
+ * 返回 true 表示已处理完毕，false 表示需走正常流程。
+ */
+async function tryHandleComparison(
+  session: AnalysisSession,
+  text: string,
+  emit: SseWriter
+): Promise<boolean> {
+  if (!COMPARE_PATTERN.test(text)) return false
+  const history = session.resultHistory ?? []
+  const trendEntries = history.filter(e => e.result.series && e.result.series.length > 0)
+  if (trendEntries.length < 2) return false
+
+  // 取最近两条趋势结果合并
+  const targets = trendEntries.slice(-2)
+  const combinedSeries = targets.flatMap(e =>
+    (e.result.series ?? []).map(pt => ({ ...pt, __series: e.label }))
+  )
+
+  // 构造对比结果：chartType = 'line_multi'，series 里区分多条线
+  const comparisonResult = {
+    summary: `对比 ${targets.map(e => e.label).join(' vs ')} 的趋势：以下为叠加折线图，直接基于已有数据绘制，无需重新查询。`,
+    chartTitle: targets.map(e => e.label).join(' vs '),
+    chartType: 'line_multi' as const,
+    breakdown: [],
+    multiSeries: targets.map((e, i) => ({
+      name: e.label,
+      color: i === 0 ? '#2563eb' : '#7c3aed',
+      data: e.result.series ?? []
+    }))
+  }
+
+  pushTurn(session, 'assistant', '')
+  const idx = session.turns.length - 1
+  session.phase = 'result'
+  session.result = comparisonResult
+  session.context.statusLabel = '对比完成'
+  await emit({ type: 'session', session: { ...session } })
+
+  const summaryText = comparisonResult.summary
+  for (const ch of summaryText) {
+    session.turns[idx].content += ch
+    await emit({ type: 'token', content: ch })
+    await sleep(20)
+  }
+  await emit({ type: 'session', session: { ...session } })
+  await emit({ type: 'done' })
+  return true
 }
 
 export async function handleAnalysisEvent(
@@ -274,6 +335,9 @@ export async function handleAnalysisEvent(
     // 立刻把用户消息推到前端，然后显示思考状态
     session.thinking = true
     await emit({ type: 'session', session: { ...session } })
+
+    // 优先检测"对比已有数据"意图，避免重新发起查询
+    if (await tryHandleComparison(session, text, emit)) return
 
     const assets = await loadSemanticAssets()
     const cap = detectCapabilityGap(text, assets.metrics)
