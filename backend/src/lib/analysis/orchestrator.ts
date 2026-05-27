@@ -398,6 +398,21 @@ export async function handleAnalysisEvent(
       return
     }
 
+    // 问题与数据分析无关，友好婉拒
+    if (llmMatch.isOffTopic) {
+      session.thinking = false
+      session.phase = 'idle'
+      session.context.statusLabel = '待开始'
+      await streamAssistantText(
+        emit,
+        session,
+        '抱歉，我是专注于数据查询与分析的 Agent，这个问题超出了我的能力范围，爱莫能助。\n\n如果你有数据分析方面的需求，欢迎随时告诉我！'
+      )
+      await emit({ type: 'session', session })
+      await emit({ type: 'done' })
+      return
+    }
+
     // scalar 查询（问总量/当前值）不需要用户指定时间段，直接取最新分区
     const needsTime = llmMatch.queryType !== 'scalar'
 

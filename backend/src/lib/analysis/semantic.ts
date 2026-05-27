@@ -183,6 +183,8 @@ export interface LLMViewMatch {
   needsClarification?: true
   clarifyQuestion?: string
   clarifyOptions?: string[]
+  /** 问题与数据分析无关，应婉拒 */
+  isOffTopic?: true
 }
 
 type RawCandidate = Record<string, unknown>
@@ -402,10 +404,14 @@ breakdownShort 选取规则：
 - clarifyOptions：2-4个具体选项，帮助用户快速选择
 - 仅在真正不确定时触发；如果能合理推断出最优解，请直接给出候选结果，无需澄清
 
+【偏题规则 — 与数据查询/统计完全无关时返回 isOffTopic】：
+- 若用户问题明显与业务数据分析无关（如聊天、写作、翻译、技术问题、生活咨询等），输出：
+{"isOffTopic": true}
+
 请按以下两步骤输出：
 
 第一步：先用 1-3 句话简述你的推理过程（如：用户在追问上轮结果，只需将 model 过滤从 M9 改为 Air1，其余条件保持不变）。
-第二步：紧跟一个 <JSON> 标记，然后输出 JSON（澄清时为对象，正常匹配时为数组），最后加 </JSON>。
+第二步：紧跟一个 <JSON> 标记，然后输出 JSON（偏题时为 isOffTopic 对象，澄清时为 needsClarification 对象，正常匹配时为数组），最后加 </JSON>。
 
 格式示例（正常匹配）：
 用户是追问，只需将 model 过滤条件从 M9 改为 Air1，其余 view/measure/queryType/时间均继承上轮。
@@ -417,6 +423,12 @@ breakdownShort 选取规则：
 用户说"看一下销售数据"，可用指标有销售额、订单量、客单价三种，无法确定用户意图。
 <JSON>
 {"needsClarification": true, "clarifyQuestion": "你想看哪个销售指标？", "clarifyOptions": ["销售额", "订单量", "客单价"]}
+</JSON>
+
+格式示例（偏题）：
+用户问的是如何写简历，与业务数据分析无关。
+<JSON>
+{"isOffTopic": true}
 </JSON>`
 
   try {
@@ -472,6 +484,11 @@ breakdownShort 选取规则：
         clarifyQuestion: typeof parsed.clarifyQuestion === 'string' ? parsed.clarifyQuestion : '请问你具体想看哪方面的数据？',
         clarifyOptions: Array.isArray(parsed.clarifyOptions) ? parsed.clarifyOptions.map(String) : []
       }
+    }
+
+    // 偏题响应：问题与数据分析无关
+    if (!Array.isArray(parsed) && parsed.isOffTopic === true) {
+      return { ...fallback, isOffTopic: true }
     }
 
     // 兼容 LLM 返回对象（旧格式）或数组（新格式）
