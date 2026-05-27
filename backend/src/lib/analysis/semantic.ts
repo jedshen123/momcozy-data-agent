@@ -344,6 +344,7 @@ filterConditions 提取规则：
 - operator 可选值：equals / contains / gt / lt / gte / lte
 - 参考 member_meta 中的描述来理解维度含义和可选值
 - 如果没有额外限定条件则 filterConditions 为空数组
+- 【重要】时间范围（最近N天、某日期区间等）不要放入 filterConditions，时间由系统单独处理
 
 breakdownShort 选取规则：
 - 仔细识别用户问题中的分组主体："各个X"、"按X分布"、"X维度" → breakdownShort 选与 X 语义最匹配的 dimension
