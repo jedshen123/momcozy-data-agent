@@ -337,6 +337,7 @@ ${viewsDesc}
 - measureShort 必须从该 View 的 measures 列表中选取，不能选 dimensions 中的成员
 - breakdownShort 必须从该 View 的 dimensions 列表中选取，不能选 measures 中的成员
 - filterConditions 中的 dimension 必须来自该 View 的 dimensions 列表
+- 如果用户要求的分组维度在当前 view 的 dimensions 中找不到匹配项，必须将支持该维度的其他 view 作为优先候选，不能用不相关的维度凑数
 
 filterConditions 提取规则：
 - 仔细分析用户问题中的限定条件（产品型号、状态标志、地区、渠道等），将其转为维度过滤
@@ -349,6 +350,7 @@ breakdownShort 选取规则：
 - 优先参考 view 的 ai_context 中明确指定了 breakdownShort 的场景说明
 - 不要默认选地理/国家维度；只有用户明确提到"国家/地区"时才选地理维度
 - 若用户未指定分组维度且 queryType=breakdown，选该 view 最具业务代表性的维度
+- 若当前 view 没有与用户分组意图匹配的 dimension，换一个有该 dimension 的 view 作为候选，不能用与用户意图无关的维度替代
 
 请只输出 JSON 数组，不要 markdown 代码块，不要多余文字：
 [

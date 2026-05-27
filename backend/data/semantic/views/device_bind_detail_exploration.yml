@@ -16,9 +16,10 @@ views:
     title: 设备绑定明细探索视图
     meta:
       ai_context: |2
-         本视图基于明细数据，支持多种维度的聚合
+         本视图专门用于设备绑定分析，基于明细数据，支持按设备型号维度聚合。
+        【优先选此视图的场景】用户问"各个设备的用户数"、"按设备型号/型号分布"、"各设备绑定用户数"
+        【支持维度】设备型号（model）、国家地区（country_ad_ch）、洲（country_locate_state）、数据来源（data_source）、绑定状态（status）
         【适用场景】
-          - 统计绑定智能设备的用户数
           - 分析各设备型号/设备类型的绑定用户数分布，breakdownShort 选 model
           - 分析各国家/地区的绑定用户数分布，breakdownShort 选 country_ad_ch
           - 分析各洲的绑定用户数分布，breakdownShort 选 country_locate_state

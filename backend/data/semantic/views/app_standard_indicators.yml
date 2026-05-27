@@ -74,7 +74,10 @@ views:
       snapshot: true
       ai_context: |-
         本视图数据来自预聚合表，查询速度最快，口径最准。
-        【支持指标】APP用户总数、DAU、WAU、 MAU、 留存用户数、社区用户数、发帖用户数、创作者留存用户数
-        【支持维度】日期、数据来源、国家地区
-        注意：如果用户询问的维度不在上述列表中，请切换至明细分析视图app_detail_exploration。
+        【支持指标】APP用户总数、DAU、WAU、MAU、留存用户数、社区用户数、发帖用户数、创作者留存用户数、智能设备绑定总用户数（仅支持国家维度聚合）
+        【支持维度】日期、数据来源、国家地区（country_ad_ch / country_locate_state）
+        【不支持】按设备型号/设备类型（model）分组 —— 如需按设备型号分布请选 device_bind_detail_exploration
+        注意：如果用户询问的维度不在上述支持列表中，请按以下规则切换视图：
+          - 按设备型号/设备类型分布 → 选 device_bind_detail_exploration
+          - 其他APP用户明细维度 → 选 app_detail_exploration
 

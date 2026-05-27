@@ -46,7 +46,9 @@ views:
           - 统计每日活跃用户数
           - 分析用户活跃趋势
           - 查询特定用户的活跃状态
-          - APP用户数 
+          - APP用户数
+          - 按设备型号分析APP用户（via join，breakdownShort 选 model）
+        注意：若只需要设备绑定用户数按设备型号分布，优先选 device_bind_detail_exploration，该视图更直接
     title: APP用户明细探索视图
     description: 统计APP用户数相关，包括APP活跃用户数、APP新增用户数、APP总用户数等
 
