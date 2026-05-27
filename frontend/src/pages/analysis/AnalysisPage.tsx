@@ -136,8 +136,8 @@ export default function AnalysisPage() {
             })
           }
           if (ev.type === 'thinking_token') {
-            pendingThinkingRef.current = ev.content
-            setSession(prev => ({ ...prev, thinkingText: ev.content }))
+            pendingThinkingRef.current += ev.content
+            setSession(prev => ({ ...prev, thinkingText: (prev.thinkingText || '') + ev.content }))
           }
           if (ev.type === 'error') setError(ev.message)
         }
@@ -252,9 +252,9 @@ export default function AnalysisPage() {
               <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
                 <span style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 700 }}>AI</span>
               </div>
-              <div style={{ padding: '0.75rem 1rem', background: '#f3f4f6', borderRadius: '1rem 1rem 1rem 0.25rem', maxWidth: '72%' }}>
+              <div style={{ padding: '0.75rem 1rem', background: '#f3f4f6', borderRadius: '1rem 1rem 1rem 0.25rem', maxWidth: '85%', minWidth: 120 }}>
                 {session.thinkingText
-                  ? <span style={{ fontSize: '0.8125rem', color: '#6b7280', fontStyle: 'italic', whiteSpace: 'pre-wrap' }}>{session.thinkingText}</span>
+                  ? <div style={{ fontSize: '0.8125rem', color: '#6b7280', fontStyle: 'italic', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6 }}>{session.thinkingText}</div>
                   : <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><ThinkingDots /></div>
                 }
               </div>
