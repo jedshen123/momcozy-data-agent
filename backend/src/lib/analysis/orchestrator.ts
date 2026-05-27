@@ -301,12 +301,13 @@ export async function handleAnalysisEvent(
     console.log(`[analysis] LLM 语义匹配开始 query="${text.slice(0, 60)}"`)
     session.thinkingText = ''
     const llmMatch = await matchViewByLLM(
-      text + ' ' + session.userQuery,
+      text,
       prevIntent,
-      async (thinkingText: string) => {
-        session.thinkingText = thinkingText
-        await emit({ type: 'thinking_token', content: thinkingText })
-      }
+      async (chunk: string) => {
+        session.thinkingText = (session.thinkingText || '') + chunk
+        await emit({ type: 'thinking_token', content: chunk })
+      },
+      session.turns
     )
     console.log(`[analysis] LLM 语义匹配完成 ${Date.now() - t0}ms → view=${llmMatch.viewName} queryType=${llmMatch.queryType} measure=${llmMatch.measureShort} breakdown=${llmMatch.breakdownShort}`)
 

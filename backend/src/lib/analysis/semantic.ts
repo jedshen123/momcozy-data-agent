@@ -254,7 +254,8 @@ export interface PrevIntentContext {
 export async function matchViewByLLM(
   userQuery: string,
   prevIntent?: PrevIntentContext,
-  onThinkingToken?: (token: string) => void
+  onThinkingToken?: (token: string) => Promise<void>,
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
 ): Promise<LLMViewMatch> {
   const catalog = await loadViewCatalog()
   const views = [...catalog.values()]
@@ -347,9 +348,16 @@ export async function matchViewByLLM(
 
 ` : ''
 
+  // 多轮对话历史：优先使用完整 turns，否则退回单条 userQuery
+  const conversationSection = conversationHistory?.length
+    ? `对话历史（完整上下文，请综合所有轮次理解用户真实意图）：
+${conversationHistory.map(t => `${t.role === 'user' ? '用户' : '助手'}：${t.content}`).join('\n')}
+当前用户最新问题：${userQuery}`
+    : `用户问题：${userQuery}`
+
   const prompt = `你是数据仓库查询助手。根据用户问题，从下方可用 Views 中按匹配度从高到低选出最多3个候选，推断每个候选所需的指标、拆分维度、查询类型，以及需要过滤的维度条件。
 ${prevIntentSection}
-用户问题：${userQuery}
+${conversationSection}
 
 可用 Views：
 ${viewsDesc}
@@ -414,17 +422,37 @@ breakdownShort 选取规则：
   try {
     const t0 = Date.now()
     let raw = ''
+    // 实时流式推送思考 token，遇到 <JSON> 标记后停止
+    let thinkingDone = false
+    let pendingThinking = ''
+
     for await (const token of streamChat([{ role: 'user', content: prompt }])) {
       raw += token
-    }
-    console.log(`[llm] matchViewByLLM 完成 ${Date.now() - t0}ms`)
 
-    // 提取思考文字（<JSON> 之前的部分），流式完成后一次性发送
-    if (onThinkingToken) {
-      const jsonStart = raw.indexOf('<JSON>')
-      const thinkingText = (jsonStart === -1 ? raw : raw.slice(0, jsonStart)).trim()
-      if (thinkingText) onThinkingToken(thinkingText)
+      if (!thinkingDone && onThinkingToken) {
+        pendingThinking += token
+        const jsonIdx = pendingThinking.indexOf('<JSON>')
+        if (jsonIdx !== -1) {
+          // 把 <JSON> 之前的部分发完，之后不再推送
+          const lastChunk = pendingThinking.slice(0, jsonIdx)
+          if (lastChunk) await onThinkingToken(lastChunk)
+          thinkingDone = true
+        } else {
+          // 保留末尾 5 个字符以防 <JSON> 跨 token 分割，其余实时推送
+          const safe = pendingThinking.length > 5 ? pendingThinking.slice(0, -5) : ''
+          if (safe) {
+            await onThinkingToken(safe)
+            pendingThinking = pendingThinking.slice(-5)
+          }
+        }
+      }
     }
+    // 流结束后若 <JSON> 从未出现，把剩余 buffer 也发出去
+    if (!thinkingDone && pendingThinking && onThinkingToken) {
+      await onThinkingToken(pendingThinking)
+    }
+
+    console.log(`[llm] matchViewByLLM 完成 ${Date.now() - t0}ms`)
 
     // 从 <JSON>...</JSON> 中提取 JSON，兼容没有标记的旧格式
     let jsonStr: string
