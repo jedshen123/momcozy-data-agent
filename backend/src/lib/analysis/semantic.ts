@@ -179,6 +179,10 @@ export interface LLMViewMatch {
   breakdownShort: string | null
   queryType: QueryType
   filterConditions: FilterCondition[]
+  /** LLM 判断信息不足时触发澄清，而非猜测 */
+  needsClarification?: true
+  clarifyQuestion?: string
+  clarifyOptions?: string[]
 }
 
 type RawCandidate = Record<string, unknown>
@@ -378,15 +382,33 @@ breakdownShort 选取规则：
 - 若用户未指定分组维度且 queryType=breakdown，选该 view 最具业务代表性的维度
 - 若当前 view 没有与用户分组意图匹配的 dimension，换一个有该 dimension 的 view 作为候选，不能用与用户意图无关的维度替代
 
+【澄清规则 — 遇到以下情况必须返回澄清，而不是猜测】：
+1. 指标语义模糊：用户描述（如"业绩"、"表现"、"数据"）对应多个 measure，无法确定唯一指标
+2. 分组维度不明确：用户说"按类型分"、"各个维度"等，dimension 列表中有多个候选且含义相近
+3. 过滤值不确定：用户提到产品名/渠道/地区等，但无法从 member_meta 或常识中确认唯一值（如只说"大号款"，实际有多个 SKU）
+4. 问题过于宽泛：无法合理推断出任何 measure（如"帮我看一下数据"，没有更多上下文）
+
+符合上述任一情况时，输出 JSON 对象（非数组）：
+{"needsClarification": true, "clarifyQuestion": "一句简洁的中文追问", "clarifyOptions": ["选项1", "选项2", "选项3"]}
+- clarifyQuestion：直接问用户缺失的信息，不超过20字
+- clarifyOptions：2-4个具体选项，帮助用户快速选择
+- 仅在真正不确定时触发；如果能合理推断出最优解，请直接给出候选结果，无需澄清
+
 请按以下两步骤输出：
 
 第一步：先用 1-3 句话简述你的推理过程（如：用户在追问上轮结果，只需将 model 过滤从 M9 改为 Air1，其余条件保持不变）。
-第二步：紧跟一个 <JSON> 标记，然后输出 JSON 数组，最后加 </JSON>。
+第二步：紧跟一个 <JSON> 标记，然后输出 JSON（澄清时为对象，正常匹配时为数组），最后加 </JSON>。
 
-格式示例：
+格式示例（正常匹配）：
 用户是追问，只需将 model 过滤条件从 M9 改为 Air1，其余 view/measure/queryType/时间均继承上轮。
 <JSON>
 [{"viewName":"...","queryType":"trend","measureShort":"...","breakdownShort":null,"filterConditions":[{"dimension":"...","operator":"equals","values":["Air1"]}]}]
+</JSON>
+
+格式示例（需澄清）：
+用户说"看一下销售数据"，可用指标有销售额、订单量、客单价三种，无法确定用户意图。
+<JSON>
+{"needsClarification": true, "clarifyQuestion": "你想看哪个销售指标？", "clarifyOptions": ["销售额", "订单量", "客单价"]}
 </JSON>`
 
   try {
@@ -413,6 +435,16 @@ breakdownShort 选取规则：
       jsonStr = raw.replace(/^```[a-z]*\n?|\n?```$/g, '').trim()
     }
     const parsed = JSON.parse(jsonStr)
+
+    // 澄清响应：LLM 判断无法确定，要求向用户追问
+    if (!Array.isArray(parsed) && parsed.needsClarification === true) {
+      return {
+        ...fallback,
+        needsClarification: true,
+        clarifyQuestion: typeof parsed.clarifyQuestion === 'string' ? parsed.clarifyQuestion : '请问你具体想看哪方面的数据？',
+        clarifyOptions: Array.isArray(parsed.clarifyOptions) ? parsed.clarifyOptions.map(String) : []
+      }
+    }
 
     // 兼容 LLM 返回对象（旧格式）或数组（新格式）
     const rawList: RawCandidate[] = Array.isArray(parsed) ? parsed : [parsed]

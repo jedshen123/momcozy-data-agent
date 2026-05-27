@@ -318,6 +318,21 @@ export async function handleAnalysisEvent(
       }))
     }
 
+    // LLM 判断信息不足，触发澄清而非猜测
+    if (llmMatch.needsClarification && session.clarifyRound < 2) {
+      session.thinking = false
+      session.phase = 'clarifying'
+      session.gapType = 'A'
+      session.clarifyRound += 1
+      session.chips = llmMatch.clarifyOptions?.length ? llmMatch.clarifyOptions : undefined
+      session.context.statusLabel = '澄清中'
+      const question = llmMatch.clarifyQuestion || '请问你具体想看哪方面的数据？'
+      await streamAssistantText(emit, session, question)
+      await emit({ type: 'session', session })
+      await emit({ type: 'done' })
+      return
+    }
+
     // scalar 查询（问总量/当前值）不需要用户指定时间段，直接取最新分区
     const needsTime = llmMatch.queryType !== 'scalar'
 
