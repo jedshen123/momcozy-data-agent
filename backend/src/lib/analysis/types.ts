@@ -85,6 +85,8 @@ export interface AnalysisSession {
   turns: TurnMessage[]
   /** AI 正在思考中（LLM 调用期间） */
   thinking?: boolean
+  /** LLM 意图识别阶段的流式思考文字 */
+  thinkingText?: string
   chips?: string[]
   gapType?: GapType
   intent?: IntentCard
@@ -116,6 +118,7 @@ export type ClientEvent =
 export type SseEvent =
   | { type: 'session'; session: AnalysisSession }
   | { type: 'token'; content: string }
+  | { type: 'thinking_token'; content: string }
   | { type: 'error'; message: string }
   | { type: 'done' }
 

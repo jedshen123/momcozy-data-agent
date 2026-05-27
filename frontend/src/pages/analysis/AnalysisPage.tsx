@@ -69,6 +69,7 @@ export default function AnalysisPage() {
   // 每当 phase 切到 result 且有新结果时，追加到历史（避免重复追加）
   useEffect(() => {
     if (session.phase === 'result' && session.result) {
+      // turnIndex 记录此刻 turns 长度，渲染时在最后一条 turn 之后插入
       const turnIndex = session.turns.length
       setResultHistory(prev => {
         const last = prev[prev.length - 1]
@@ -104,6 +105,12 @@ export default function AnalysisPage() {
               }
               return { ...prev, turns }
             })
+          }
+          if (ev.type === 'thinking_token') {
+            setSession(prev => ({
+              ...prev,
+              thinkingText: (prev.thinkingText || '') + ev.content
+            }))
           }
           if (ev.type === 'error') setError(ev.message)
         }
@@ -146,45 +153,56 @@ export default function AnalysisPage() {
           )}
 
           {session.turns.map((msg, i) => (
-            <div
-              key={i}
-              style={{
-                marginBottom: '1rem',
-                display: 'flex',
-                justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start'
-              }}
-            >
-              {msg.role === 'assistant' && (
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '0.5rem', flexShrink: 0, alignSelf: 'flex-end' }}>
-                  <span style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 700 }}>AI</span>
-                </div>
-              )}
+            <div key={i}>
               <div
                 style={{
-                  maxWidth: '72%',
-                  padding: '0.75rem 1rem',
-                  borderRadius: msg.role === 'user' ? '1rem 1rem 0.25rem 1rem' : '1rem 1rem 1rem 0.25rem',
-                  backgroundColor: msg.role === 'user' ? '#2563eb' : '#f3f4f6',
-                  color: msg.role === 'user' ? '#fff' : '#111827',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  fontSize: '0.875rem',
-                  lineHeight: 1.6
+                  marginBottom: '1rem',
+                  display: 'flex',
+                  justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start'
                 }}
               >
-                {msg.content || (busy && i === session.turns.length - 1 && msg.role === 'assistant' ? '▌' : '')}
+                {msg.role === 'assistant' && (
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '0.5rem', flexShrink: 0, alignSelf: 'flex-end' }}>
+                    <span style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 700 }}>AI</span>
+                  </div>
+                )}
+                <div
+                  style={{
+                    maxWidth: '72%',
+                    padding: '0.75rem 1rem',
+                    borderRadius: msg.role === 'user' ? '1rem 1rem 0.25rem 1rem' : '1rem 1rem 1rem 0.25rem',
+                    backgroundColor: msg.role === 'user' ? '#2563eb' : '#f3f4f6',
+                    color: msg.role === 'user' ? '#fff' : '#111827',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    fontSize: '0.875rem',
+                    lineHeight: 1.6
+                  }}
+                >
+                  {msg.content || (busy && i === session.turns.length - 1 && msg.role === 'assistant' ? '▌' : '')}
+                </div>
               </div>
+              {/* 在对应 turn 之后插入历史结果卡片（只读） */}
+              {resultHistory
+                .filter(e => e.turnIndex === i + 1 && !(session.phase === 'result' && e === resultHistory[resultHistory.length - 1]))
+                .map((entry, j) => (
+                  <ResultBlock key={`hist-${i}-${j}`} result={entry.result} busy={false} readonly />
+                ))
+              }
             </div>
           ))}
 
-          {/* AI 思考中动画 */}
+          {/* AI 思考中：显示流式思考文字或动画 */}
           {session.thinking && (
-            <div style={{ display: 'flex', alignItems: 'flex-end', marginBottom: '1rem', gap: '0.5rem' }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '1rem', gap: '0.5rem' }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
                 <span style={{ color: '#fff', fontSize: '0.7rem', fontWeight: 700 }}>AI</span>
               </div>
-              <div style={{ padding: '0.75rem 1rem', background: '#f3f4f6', borderRadius: '1rem 1rem 1rem 0.25rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <ThinkingDots />
+              <div style={{ padding: '0.75rem 1rem', background: '#f3f4f6', borderRadius: '1rem 1rem 1rem 0.25rem', maxWidth: '72%' }}>
+                {session.thinkingText
+                  ? <span style={{ fontSize: '0.8125rem', color: '#6b7280', fontStyle: 'italic', whiteSpace: 'pre-wrap' }}>{session.thinkingText}</span>
+                  : <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><ThinkingDots /></div>
+                }
               </div>
             </div>
           )}
@@ -210,11 +228,6 @@ export default function AnalysisPage() {
           )}
 
           {session.phase === 'executing' && session.steps && <ExecutionLog steps={session.steps} />}
-
-          {/* 历史结果卡片（只读，保留之前轮次的图表） */}
-          {resultHistory.slice(0, session.phase === 'result' ? -1 : undefined).map((entry, i) => (
-            <ResultBlock key={i} result={entry.result} busy={false} readonly />
-          ))}
 
           {session.phase === 'result' && session.result && (
             <ResultBlock

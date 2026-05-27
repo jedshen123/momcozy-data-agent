@@ -1,5 +1,5 @@
 import { readAll } from '../storage.js'
-import { chatOnce } from '../llm.js'
+import { chatOnce, streamChat } from '../llm.js'
 import { loadViewCatalog } from '../query/viewCatalog.js'
 import { loadSemanticCatalog } from '../query/semanticCatalog.js'
 import type { DisambiguationRecord, ExperienceRecord, MetricRecord, QueryType } from './types.js'
@@ -247,7 +247,11 @@ export interface PrevIntentContext {
  * LLM 返回有序候选列表（最多3个），后端按顺序做 includes 成员校验，
  * 取第一个通过校验的候选，消除对 ai_context 文案精准度的依赖。
  */
-export async function matchViewByLLM(userQuery: string, prevIntent?: PrevIntentContext): Promise<LLMViewMatch> {
+export async function matchViewByLLM(
+  userQuery: string,
+  prevIntent?: PrevIntentContext,
+  onThinkingToken?: (token: string) => void
+): Promise<LLMViewMatch> {
   const catalog = await loadViewCatalog()
   const views = [...catalog.values()]
 
@@ -374,25 +378,38 @@ breakdownShort 选取规则：
 - 若用户未指定分组维度且 queryType=breakdown，选该 view 最具业务代表性的维度
 - 若当前 view 没有与用户分组意图匹配的 dimension，换一个有该 dimension 的 view 作为候选，不能用与用户意图无关的维度替代
 
-请只输出 JSON 数组，不要 markdown 代码块，不要多余文字：
-[
-  {
-    "viewName": "匹配度最高的 view name（必须是上方列表中的 name 之一）",
-    "queryType": "scalar | trend | breakdown | trend_breakdown",
-    "measureShort": "用户想查的指标短名（必须来自该 view 的 measures 列表）",
-    "breakdownShort": "拆分维度短名（必须来自该 view 的 dimensions 列表；queryType为trend/scalar时填null；无拆分需求也填null）",
-    "filterConditions": [
-      {"dimension": "维度短名（必须来自该 view 的 dimensions 列表）", "operator": "equals", "values": ["过滤值"]}
-    ]
-  }
-]`
+请按以下两步骤输出：
+
+第一步：先用 1-3 句话简述你的推理过程（如：用户在追问上轮结果，只需将 model 过滤从 M9 改为 Air1，其余条件保持不变）。
+第二步：紧跟一个 <JSON> 标记，然后输出 JSON 数组，最后加 </JSON>。
+
+格式示例：
+用户是追问，只需将 model 过滤条件从 M9 改为 Air1，其余 view/measure/queryType/时间均继承上轮。
+<JSON>
+[{"viewName":"...","queryType":"trend","measureShort":"...","breakdownShort":null,"filterConditions":[{"dimension":"...","operator":"equals","values":["Air1"]}]}]
+</JSON>`
 
   try {
     const t0 = Date.now()
-    const raw = await chatOnce([{ role: 'user', content: prompt }])
-    console.log(`[llm] chatOnce 完成 ${Date.now() - t0}ms`)
-    const json = raw.replace(/^```[a-z]*\n?|\n?```$/g, '').trim()
-    const parsed = JSON.parse(json)
+    let raw = ''
+    for await (const token of streamChat([{ role: 'user', content: prompt }])) {
+      raw += token
+      // 流式转发思考文字（<JSON> 标记前的部分）
+      if (onThinkingToken && !raw.includes('<JSON>')) {
+        onThinkingToken(token)
+      }
+    }
+    console.log(`[llm] matchViewByLLM 完成 ${Date.now() - t0}ms`)
+
+    // 从 <JSON>...</JSON> 中提取 JSON，兼容没有标记的旧格式
+    let jsonStr: string
+    const jsonTagMatch = raw.match(/<JSON>([\s\S]*?)<\/JSON>/)
+    if (jsonTagMatch) {
+      jsonStr = jsonTagMatch[1].trim()
+    } else {
+      jsonStr = raw.replace(/^```[a-z]*\n?|\n?```$/g, '').trim()
+    }
+    const parsed = JSON.parse(jsonStr)
 
     // 兼容 LLM 返回对象（旧格式）或数组（新格式）
     const rawList: RawCandidate[] = Array.isArray(parsed) ? parsed : [parsed]

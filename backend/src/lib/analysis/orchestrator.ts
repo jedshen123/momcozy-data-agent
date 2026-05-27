@@ -298,7 +298,15 @@ export async function handleAnalysisEvent(
     // 先做 LLM 语义匹配，拿到 queryType 后再决定是否需要时间
     const t0 = Date.now()
     console.log(`[analysis] LLM 语义匹配开始 query="${text.slice(0, 60)}"`)
-    const llmMatch = await matchViewByLLM(text + ' ' + session.userQuery, prevIntent)
+    session.thinkingText = ''
+    const llmMatch = await matchViewByLLM(
+      text + ' ' + session.userQuery,
+      prevIntent,
+      async (token: string) => {
+        session.thinkingText = (session.thinkingText || '') + token
+        await emit({ type: 'thinking_token', content: token })
+      }
+    )
     console.log(`[analysis] LLM 语义匹配完成 ${Date.now() - t0}ms → view=${llmMatch.viewName} queryType=${llmMatch.queryType} measure=${llmMatch.measureShort} breakdown=${llmMatch.breakdownShort}`)
 
     // 回填维度中文标题（失败静默）
