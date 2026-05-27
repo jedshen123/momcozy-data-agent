@@ -394,21 +394,15 @@ breakdownShort 选取规则：
     let raw = ''
     for await (const token of streamChat([{ role: 'user', content: prompt }])) {
       raw += token
-      // 只转发 <JSON> 标记之前的思考内容
-      if (onThinkingToken) {
-        const jsonStart = raw.indexOf('<JSON>')
-        if (jsonStart === -1) {
-          onThinkingToken(token)
-        } else {
-          // 刚刚越过 <JSON>，把边界前还未发送的部分补发一次
-          const alreadySent = raw.length - token.length
-          if (alreadySent < jsonStart) {
-            onThinkingToken(raw.slice(alreadySent, jsonStart))
-          }
-        }
-      }
     }
     console.log(`[llm] matchViewByLLM 完成 ${Date.now() - t0}ms`)
+
+    // 提取思考文字（<JSON> 之前的部分），流式完成后一次性发送
+    if (onThinkingToken) {
+      const jsonStart = raw.indexOf('<JSON>')
+      const thinkingText = (jsonStart === -1 ? raw : raw.slice(0, jsonStart)).trim()
+      if (thinkingText) onThinkingToken(thinkingText)
+    }
 
     // 从 <JSON>...</JSON> 中提取 JSON，兼容没有标记的旧格式
     let jsonStr: string

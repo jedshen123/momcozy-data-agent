@@ -136,11 +136,8 @@ export default function AnalysisPage() {
             })
           }
           if (ev.type === 'thinking_token') {
-            pendingThinkingRef.current += ev.content
-            setSession(prev => ({
-              ...prev,
-              thinkingText: (prev.thinkingText || '') + ev.content
-            }))
+            pendingThinkingRef.current = ev.content
+            setSession(prev => ({ ...prev, thinkingText: ev.content }))
           }
           if (ev.type === 'error') setError(ev.message)
         }

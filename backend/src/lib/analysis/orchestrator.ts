@@ -303,9 +303,9 @@ export async function handleAnalysisEvent(
     const llmMatch = await matchViewByLLM(
       text + ' ' + session.userQuery,
       prevIntent,
-      async (token: string) => {
-        session.thinkingText = (session.thinkingText || '') + token
-        await emit({ type: 'thinking_token', content: token })
+      async (thinkingText: string) => {
+        session.thinkingText = thinkingText
+        await emit({ type: 'thinking_token', content: thinkingText })
       }
     )
     console.log(`[analysis] LLM 语义匹配完成 ${Date.now() - t0}ms → view=${llmMatch.viewName} queryType=${llmMatch.queryType} measure=${llmMatch.measureShort} breakdown=${llmMatch.breakdownShort}`)
