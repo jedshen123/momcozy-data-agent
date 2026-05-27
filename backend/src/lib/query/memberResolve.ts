@@ -3,6 +3,8 @@ import { fallbackViewMember, getViewEntry, type ViewCatalogEntry } from './viewC
 
 export interface CubeMetaIndex {
   byViewShort: Map<string, string>
+  /** shortName → 中文短标题，用于 UI 展示过滤条件 */
+  shortTitleByShort: Map<string, string>
 }
 
 /**

@@ -24,6 +24,7 @@ import type {
 import { emptySession } from './types.js'
 import { runAnalysisQuery } from '../query/runAnalysisQuery.js'
 import { getQueryEngineInfo } from '../query/queryEngine.js'
+import { getDimensionTitle } from '../query/cubeMeta.js'
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
@@ -41,7 +42,7 @@ function buildIntent(
   measureShort?: string,
   breakdownShort?: string | null,
   queryType?: QueryType,
-  filterConditions?: Array<{ dimension: string; operator: string; values: string[] }>
+  filterConditions?: Array<{ dimension: string; operator: string; values: string[]; title?: string }>
 ): IntentCard {
   const region = /华东|华北|华南|渠道/.test(userText)
     ? userText.match(/华东|华北|华南|各渠道|渠道/)?.[0] || ''
@@ -59,7 +60,7 @@ function buildIntent(
     : timeRange === '不限时间' ? '不限时间'
     : ''
   const filterDesc = filterConditions?.length
-    ? filterConditions.map(f => `${f.dimension}=${f.values.join('/')}`).join('·')
+    ? filterConditions.map(f => `${f.title || f.dimension}=${f.values.join('/')}`).join('·')
     : ''
   const summary = [filterDesc, timeDisplay, metricName, analysisLabel]
     .filter(Boolean)
@@ -287,6 +288,14 @@ export async function handleAnalysisEvent(
     console.log(`[analysis] LLM 语义匹配开始 query="${text.slice(0, 60)}"`)
     const llmMatch = await matchViewByLLM(text + ' ' + session.userQuery)
     console.log(`[analysis] LLM 语义匹配完成 ${Date.now() - t0}ms → view=${llmMatch.viewName} queryType=${llmMatch.queryType} measure=${llmMatch.measureShort} breakdown=${llmMatch.breakdownShort}`)
+
+    // 回填维度中文标题（失败静默）
+    if (llmMatch.filterConditions?.length) {
+      await Promise.all(llmMatch.filterConditions.map(async f => {
+        const t = await getDimensionTitle(f.dimension)
+        if (t) f.title = t
+      }))
+    }
 
     // scalar 查询（问总量/当前值）不需要用户指定时间段，直接取最新分区
     const needsTime = llmMatch.queryType !== 'scalar'

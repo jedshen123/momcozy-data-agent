@@ -19,6 +19,7 @@ export interface IntentCard {
   metric?: string
   metricId?: string
   view?: string
+  filterConditions?: Array<{ dimension: string; operator: string; values: string[]; title?: string }>
 }
 
 export interface ExecutionStep {

@@ -31,7 +31,7 @@ export interface IntentCard {
   /** LLM 识别的查询类型 */
   queryType?: QueryType
   /** LLM 识别的维度过滤条件 */
-  filterConditions?: Array<{ dimension: string; operator: string; values: string[] }>
+  filterConditions?: Array<{ dimension: string; operator: string; values: string[]; title?: string }>
 }
 
 export interface ExecutionStep {

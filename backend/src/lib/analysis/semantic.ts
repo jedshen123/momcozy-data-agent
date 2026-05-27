@@ -168,6 +168,7 @@ export interface FilterCondition {
   dimension: string
   operator: string
   values: string[]
+  title?: string
 }
 
 export interface LLMViewMatch {

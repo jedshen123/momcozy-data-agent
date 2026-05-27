@@ -317,7 +317,7 @@ function IntentBlock({
           <div style={{ marginTop: '0.15rem', display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
             {intent.filterConditions.map((f, i) => (
               <span key={i} style={{ fontSize: '0.8125rem', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '0.375rem', padding: '0.1rem 0.5rem' }}>
-                {f.dimension}：{f.values.join(' / ')}
+                {f.title || f.dimension}：{f.values.join(' / ')}
               </span>
             ))}
           </div>

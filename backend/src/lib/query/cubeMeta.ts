@@ -35,12 +35,13 @@ export async function loadCubeMetaIndex(): Promise<CubeMetaIndex> {
   const body = (await res.json()) as {
     cubes?: Array<{
       name: string
-      measures?: Array<{ name: string; aliasMember?: string }>
-      dimensions?: Array<{ name: string; aliasMember?: string }>
+      measures?: Array<{ name: string; shortTitle?: string; aliasMember?: string }>
+      dimensions?: Array<{ name: string; shortTitle?: string; aliasMember?: string }>
     }>
   }
 
   const byViewShort = new Map<string, string>()
+  const shortTitleByShort = new Map<string, string>()
 
   for (const cube of body.cubes || []) {
     const viewName = cube.name
@@ -53,23 +54,39 @@ export async function loadCubeMetaIndex(): Promise<CubeMetaIndex> {
 
       if (m.aliasMember) {
         const short = m.aliasMember.split('.').pop()
-        if (short) byViewShort.set(`${viewName}:${short}`, full)
+        if (short) {
+          byViewShort.set(`${viewName}:${short}`, full)
+          if (m.shortTitle) shortTitleByShort.set(short, m.shortTitle)
+        }
       }
 
       // 从 full 名还原 short：去掉 view.cubePart_ 前缀
       const underscore = rest.indexOf('_')
       if (underscore > 0) {
         const shortGuess = rest.slice(underscore + 1)
-        if (shortGuess) byViewShort.set(`${viewName}:${shortGuess}`, full)
+        if (shortGuess) {
+          byViewShort.set(`${viewName}:${shortGuess}`, full)
+          if (m.shortTitle) shortTitleByShort.set(shortGuess, m.shortTitle)
+        }
       }
       byViewShort.set(`${viewName}:${rest}`, full)
+      if (m.shortTitle) shortTitleByShort.set(rest, m.shortTitle)
     }
   }
 
-  const index: CubeMetaIndex = { byViewShort }
+  const index: CubeMetaIndex = { byViewShort, shortTitleByShort }
   metaCache = { index, fetchedAt: Date.now() }
   console.log(`[cube] meta 拉取完成 ${Date.now() - t0}ms，共 ${body.cubes?.length ?? 0} 个 cube，${byViewShort.size} 个成员映射`)
   return index
+}
+
+export async function getDimensionTitle(shortName: string): Promise<string | null> {
+  try {
+    const index = await loadCubeMetaIndex()
+    return index.shortTitleByShort.get(shortName) ?? null
+  } catch {
+    return null
+  }
 }
 
 export function invalidateCubeMeta() {
