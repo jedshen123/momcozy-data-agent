@@ -513,8 +513,8 @@ function ResultBlock({
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(v: unknown, _name: unknown, props: { payload?: { display?: string } }) =>
-                    [props?.payload?.display ?? formatVal(Number(v)), '']
+                  formatter={(v: unknown, name: unknown, props: { payload?: { display?: string } }) =>
+                    [props?.payload?.display ?? formatVal(Number(v)), String(name)]
                   }
                   contentStyle={{ fontSize: '0.8125rem', borderRadius: '0.5rem', border: '1px solid #e5e7eb' }}
                 />

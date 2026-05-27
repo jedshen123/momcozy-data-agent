@@ -344,6 +344,12 @@ filterConditions 提取规则：
 - 参考 member_meta 中的描述来理解维度含义和可选值
 - 如果没有额外限定条件则 filterConditions 为空数组
 
+breakdownShort 选取规则：
+- 仔细识别用户问题中的分组主体："各个X"、"按X分布"、"X维度" → breakdownShort 选与 X 语义最匹配的 dimension
+- 优先参考 view 的 ai_context 中明确指定了 breakdownShort 的场景说明
+- 不要默认选地理/国家维度；只有用户明确提到"国家/地区"时才选地理维度
+- 若用户未指定分组维度且 queryType=breakdown，选该 view 最具业务代表性的维度
+
 请只输出 JSON 数组，不要 markdown 代码块，不要多余文字：
 [
   {

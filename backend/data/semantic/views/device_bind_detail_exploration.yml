@@ -19,5 +19,8 @@ views:
          本视图基于明细数据，支持多种维度的聚合
         【适用场景】
           - 统计绑定智能设备的用户数
+          - 分析各设备型号/设备类型的绑定用户数分布，breakdownShort 选 model
+          - 分析各国家/地区的绑定用户数分布，breakdownShort 选 country_ad_ch
+          - 分析各洲的绑定用户数分布，breakdownShort 选 country_locate_state
     description: 设备绑定明细探索视图
 
