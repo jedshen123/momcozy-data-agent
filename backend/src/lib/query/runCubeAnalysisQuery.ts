@@ -155,6 +155,80 @@ export async function runCubeAnalysisQuery(params: {
       trendRows = rowsToMetricSeries(trendRes.data as QueryRow[], measure, spec.timeDimension)
         .map(s => ({ dt: s.date, metric_value: s.value }))
       breakdownRows = []
+    } else if (queryType === 'trend_top_n') {
+      // 两步：先取 Top N 维度值，再分别查各自趋势
+      const topN = params.intent.topN ?? 5
+      const rankMeasureShort = params.intent.rankMeasureShort || params.intent.measureShort || ''
+      const rankMeasure = rankMeasureShort && rankMeasureShort !== (spec.primaryMeasure?.split('.').pop() || '')
+        ? await (async () => {
+            try { return await resolveViewMember(spec.viewName, rankMeasureShort) }
+            catch { return measure }
+          })()
+        : measure
+
+      if (!spec.breakdownDimension) throw new Error('trend_top_n 需要 breakdownShort')
+
+      // 第一步：按排名指标取 Top N
+      const rankQ = buildDistributionQuery({ ...spec, queryType: 'breakdown' }, rankMeasure)
+      queries.push({ label: `Top${topN} 排名`, query: rankQ })
+      const rankRes = await cubeLoad(rankQ)
+      const topLabels = rowsToBreakdown(rankRes.data as QueryRow[], rankMeasure, spec.breakdownDimension)
+        .slice(0, topN)
+        .map(b => b.label)
+        .filter(Boolean)
+
+      console.log(`[cube] trend_top_n Top${topN} 维度值: ${topLabels.join(', ')}`)
+
+      // 第二步：对每个维度值分别查趋势
+      const SERIES_COLORS = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626',
+        '#0891b2', '#7c3aed', '#65a30d', '#ea580c', '#9333ea']
+      const seriesResults = await Promise.all(
+        topLabels.map(async (label, i) => {
+          const dimFilter = { member: spec.breakdownDimension!, operator: 'equals', values: [label] }
+          const trendQ = buildTrendQuery(
+            { ...spec, filters: [...spec.filters, dimFilter] },
+            measure
+          )
+          queries.push({ label: `趋势-${label}`, query: trendQ })
+          const res = await cubeLoad(trendQ)
+          const data = rowsToMetricSeries(res.data as QueryRow[], measure, spec.timeDimension)
+          return { name: label, color: SERIES_COLORS[i % SERIES_COLORS.length], data }
+        })
+      )
+
+      // 合并所有系列的行数用于 rowCount
+      trendRows = seriesResults.flatMap(s => s.data.map(d => ({ dt: d.date, metric_value: d.value })))
+      breakdownRows = topLabels.map((label, i) => ({
+        dim_label: label,
+        metric_value: seriesResults[i]?.data.reduce((sum, d) => sum + d.value, 0) ?? 0
+      }))
+
+      // 直接构造最终输出，跳过 formatAnalysisResult
+      let displaySqlTop = ''
+      try {
+        const parts = await Promise.all(
+          queries.map(async q => `-- ${q.label}\n${await cubeSql(q.query as import('./cubeTypes.js').CubeQuery)}`)
+        )
+        displaySqlTop = parts.join('\n\n')
+      } catch {
+        displaySqlTop = queries.map(q => `-- ${q.label}\n${JSON.stringify(q.query, null, 2)}`).join('\n\n')
+      }
+
+      return {
+        summary: `Top${topN} ${spec.breakdownDimension.split('.').pop() || '维度'} 的 ${spec.metricName} 趋势（近 ${params.intent.timeRange}）：${topLabels.join('、')}`,
+        chartTitle: `Top${topN} ${spec.metricName} 趋势`,
+        chartType: 'line_multi',
+        breakdown: topLabels.map((label, i) => ({
+          label,
+          value: String(Math.round(seriesResults[i]?.data.reduce((sum, d) => sum + d.value, 0) ?? 0)),
+          width: '100%',
+          raw: seriesResults[i]?.data.reduce((sum, d) => sum + d.value, 0) ?? 0
+        })),
+        multiSeries: seriesResults,
+        sql: displaySqlTop,
+        rowCount: trendRows.length,
+        cubeQueries: queries.map(q => q.query)
+      }
     } else {
       // trend_breakdown：趋势 + 分布同时查
       const trendQ = buildTrendQuery(spec, measure)

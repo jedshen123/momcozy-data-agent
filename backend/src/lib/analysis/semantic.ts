@@ -179,6 +179,10 @@ export interface LLMViewMatch {
   breakdownShort: string | null
   queryType: QueryType
   filterConditions: FilterCondition[]
+  /** trend_top_n：取 Top N 的数量 */
+  topN?: number
+  /** trend_top_n：用于排名的指标短名（不填则与 measureShort 相同） */
+  rankMeasureShort?: string
   /** LLM 判断信息不足时触发澄清，而非猜测 */
   needsClarification?: true
   clarifyQuestion?: string
@@ -191,7 +195,7 @@ type RawCandidate = Record<string, unknown>
 type ViewMap = Map<string, { name: string; includes: Set<string>; cubeNames: string[] }>
 
 function parseCandidate(raw: RawCandidate, catalog: ViewMap): LLMViewMatch | null {
-  const validQueryTypes: QueryType[] = ['trend', 'breakdown', 'trend_breakdown', 'scalar']
+  const validQueryTypes: QueryType[] = ['trend', 'breakdown', 'trend_breakdown', 'scalar', 'trend_top_n']
   const viewName = typeof raw.viewName === 'string' && catalog.has(raw.viewName) ? raw.viewName : null
   if (!viewName) return null
   const measureShort = typeof raw.measureShort === 'string' ? raw.measureShort : ''
@@ -212,7 +216,14 @@ function parseCandidate(raw: RawCandidate, catalog: ViewMap): LLMViewMatch | nul
     }))
     .filter(f => f.dimension && f.values.length > 0)
 
-  return { viewName, measureShort, breakdownShort, queryType, filterConditions }
+  const topN = typeof raw.topN === 'number' && raw.topN > 0
+    ? Math.min(Math.round(raw.topN), 20)
+    : undefined
+  const rankMeasureShort = typeof raw.rankMeasureShort === 'string' && raw.rankMeasureShort
+    ? raw.rankMeasureShort
+    : undefined
+
+  return { viewName, measureShort, breakdownShort, queryType, filterConditions, topN, rankMeasureShort }
 }
 
 function validateCandidate(c: LLMViewMatch, catalog: ViewMap): boolean {
@@ -369,6 +380,7 @@ ${viewsDesc}
 - "trend"：用户问趋势、走势、变化、近N天/月，需要按时间粒度（天）聚合的折线数据
 - "breakdown"：用户问分布、各个X的Y、按X分组，只需要按维度聚合，不需要时间序列
 - "trend_breakdown"：用户同时关心趋势和分布（默认）
+- "trend_top_n"：用户要看某维度 Top N 的各自趋势（如"Top5设备的活跃用户趋势"、"绑定量最多的5款产品的活跃用户走势"），需先按排名指标取 Top N 维度值，再分别查各自的趋势，画出 N 条折线；此时 breakdownShort 必须填写分组维度，topN 填写 N 值，rankMeasureShort 填写排名指标短名（若排名指标与 measureShort 不同时必填）
 
 选择依据：优先参考每个 View 的 ai_context 字段来判断语义匹配程度；每个 View 已按类型列出 measures（度量指标）和 dimensions（维度）。
 
@@ -417,6 +429,12 @@ breakdownShort 选取规则：
 用户是追问，只需将 model 过滤条件从 M9 改为 Air1，其余 view/measure/queryType/时间均继承上轮。
 <JSON>
 [{"viewName":"...","queryType":"trend","measureShort":"...","breakdownShort":null,"filterConditions":[{"dimension":"...","operator":"equals","values":["Air1"]}]}]
+</JSON>
+
+格式示例（trend_top_n）：
+用户要看绑定量 Top5 设备的社区活跃用户趋势，需先按绑定量排名取 Top5 设备，再分别查各设备的活跃用户趋势。
+<JSON>
+[{"viewName":"...","queryType":"trend_top_n","measureShort":"active_users","breakdownShort":"device_model","topN":5,"rankMeasureShort":"binding_count","filterConditions":[]}]
 </JSON>
 
 格式示例（需澄清）：

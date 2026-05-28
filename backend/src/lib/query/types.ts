@@ -35,10 +35,12 @@ export interface QueryResult {
 export interface AnalysisQueryOutput {
   summary: string
   chartTitle: string
-  /** 图表类型：line=折线趋势，bar=横向柱状分布，bar_vertical=竖向柱状趋势，scalar=单值卡片，pie=饼图 */
-  chartType: 'line' | 'bar' | 'bar_vertical' | 'scalar' | 'pie'
+  /** 图表类型：line=折线趋势，bar=横向柱状分布，bar_vertical=竖向柱状趋势，scalar=单值卡片，pie=饼图，line_multi=多系列折线 */
+  chartType: 'line' | 'bar' | 'bar_vertical' | 'scalar' | 'pie' | 'line_multi'
   breakdown: Array<{ label: string; value: string; width: string; raw: number }>
   series?: Array<{ date: string; value: number }>
+  /** 多系列折线（chartType=line_multi 时使用） */
+  multiSeries?: Array<{ name: string; color: string; data: Array<{ date: string; value: number }> }>
   sql: string
   rowCount: number
   /** 发向 Cube Core 的原始查询体，用于调试 */

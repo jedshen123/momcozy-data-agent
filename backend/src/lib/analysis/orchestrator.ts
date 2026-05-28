@@ -44,7 +44,9 @@ function buildIntent(
   measureShort?: string,
   breakdownShort?: string | null,
   queryType?: QueryType,
-  filterConditions?: Array<{ dimension: string; operator: string; values: string[]; title?: string }>
+  filterConditions?: Array<{ dimension: string; operator: string; values: string[]; title?: string }>,
+  topN?: number,
+  rankMeasureShort?: string
 ): IntentCard {
   const region = /华东|华北|华南|渠道/.test(userText)
     ? userText.match(/华东|华北|华南|各渠道|渠道/)?.[0] || ''
@@ -53,6 +55,7 @@ function buildIntent(
     : queryType === 'breakdown' ? '分布分析'
     : queryType === 'trend' ? '趋势分析'
     : queryType === 'trend_breakdown' ? '趋势 & 分布分析'
+    : queryType === 'trend_top_n' ? `Top${topN ?? 5} 趋势分析`
     : '数据分析'
 
   // 只有时间已实际确定时才显示，避免「待指定」等占位符出现在摘要里
@@ -78,7 +81,9 @@ function buildIntent(
     measureShort,
     breakdownShort,
     queryType,
-    filterConditions: filterConditions?.length ? filterConditions : undefined
+    filterConditions: filterConditions?.length ? filterConditions : undefined,
+    topN,
+    rankMeasureShort
   }
 }
 
@@ -406,7 +411,7 @@ export async function handleAnalysisEvent(
       await streamAssistantText(
         emit,
         session,
-        '抱歉，我是专注于数据查询与分析的 Agent，这个问题超出了我的能力范围，爱莫能助。\n\n如果你有数据分析方面的需求，欢迎随时告诉我！'
+        '抱歉，我是专注于数据查询与分析的 Agent。如果你有数据分析方面的需求，欢迎随时告诉我！'
       )
       await emit({ type: 'session', session })
       await emit({ type: 'done' })
@@ -455,7 +460,9 @@ export async function handleAnalysisEvent(
       llmMatch.measureShort || undefined,
       llmMatch.breakdownShort,
       llmMatch.queryType,
-      llmMatch.filterConditions
+      llmMatch.filterConditions,
+      llmMatch.topN,
+      llmMatch.rankMeasureShort
     )
     session.context = {
       statusLabel: '待确认意图',

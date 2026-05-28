@@ -14,8 +14,8 @@ export interface TurnMessage {
   content: string
 }
 
-/** 查询类型：趋势 / 分布 / 趋势+分布 / 单值聚合 */
-export type QueryType = 'trend' | 'breakdown' | 'trend_breakdown' | 'scalar'
+/** 查询类型：趋势 / 分布 / 趋势+分布 / 单值聚合 / Top N 各自趋势 */
+export type QueryType = 'trend' | 'breakdown' | 'trend_breakdown' | 'scalar' | 'trend_top_n'
 
 export interface IntentCard {
   summary: string
@@ -32,6 +32,10 @@ export interface IntentCard {
   queryType?: QueryType
   /** LLM 识别的维度过滤条件 */
   filterConditions?: Array<{ dimension: string; operator: string; values: string[]; title?: string }>
+  /** trend_top_n：取 Top N 的数量 */
+  topN?: number
+  /** trend_top_n：用于排名的指标短名（不填则与 measureShort 相同） */
+  rankMeasureShort?: string
 }
 
 export interface ExecutionStep {
