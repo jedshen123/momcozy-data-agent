@@ -1,6 +1,6 @@
 import type { GapType } from './types.js'
 
-const IMPLICIT_TIME = /上个月|上月|最近|本周|本季度|过去\s*\d+\s*天|近\s*\d+\s*天|今年|昨天|今日|本月|全部时间|所有时间|不限时间/
+const IMPLICIT_TIME = /上个月|上月|最近|本周|本季度|过去\s*\d+\s*(天|个?月)|近\s*\d+\s*(天|个?月)|今年|昨天|今日|本月|全部时间|所有时间|不限时间/
 const EXPLICIT_TIME = /\d{4}[-/年]\d{1,2}|Q[1-4]|季度/
 
 export interface TimeInference {
@@ -11,7 +11,20 @@ export interface TimeInference {
 }
 
 function formatDate(d: Date) {
-  return d.toISOString().slice(0, 10)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function subtractMonths(d: Date, months: number) {
+  const result = new Date(d)
+  const originalDay = result.getDate()
+  result.setDate(1)
+  result.setMonth(result.getMonth() - months)
+  const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate()
+  result.setDate(Math.min(originalDay, lastDay))
+  return result
 }
 
 /** 以服务端当前日为基准推断区间（v1 规则，对齐设计 B 类） */
@@ -50,6 +63,16 @@ export function inferTimeRange(text: string, now = new Date()): { timeRange: str
     return {
       timeRange: `${formatDate(start)} ~ ${formatDate(end)}`,
       defaultNote: `📌 时间：已按「最近 ${n} 天」解析`
+    }
+  }
+  // 通用 N 个月解析：「最近/过去/近 N 个月」
+  const nMonthMatch = t.match(/(?:最近|过去|近)\s*(\d+)\s*个?月/)
+  if (nMonthMatch) {
+    const n = parseInt(nMonthMatch[1], 10)
+    start = subtractMonths(end, n)
+    return {
+      timeRange: `${formatDate(start)} ~ ${formatDate(end)}`,
+      defaultNote: `📌 时间：已按「最近 ${n} 个月」解析`
     }
   }
   if (/本季度/.test(t)) {
