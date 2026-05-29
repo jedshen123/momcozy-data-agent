@@ -264,6 +264,7 @@ async function runExecuting(
       chartType: output.chartType,
       breakdown: output.breakdown,
       series: output.series,
+      multiSeries: output.multiSeries,
       sql: output.sql,
       rowCount: output.rowCount,
       cubeQueries: output.cubeQueries
