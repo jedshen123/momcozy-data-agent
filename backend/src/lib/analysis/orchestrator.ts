@@ -27,6 +27,7 @@ import { emptySession } from './types.js'
 import { runAnalysisQuery } from '../query/runAnalysisQuery.js'
 import { getQueryEngineInfo } from '../query/queryEngine.js'
 import { getDimensionTitle } from '../query/cubeMeta.js'
+import { buildAnalysisPlanPreview } from '../query/analysisPlan.js'
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
@@ -87,6 +88,26 @@ function buildIntent(
   }
 }
 
+async function attachAnalysisPlan(
+  intent: IntentCard,
+  userQuery: string,
+  metricId = ''
+): Promise<IntentCard> {
+  if (getQueryEngineInfo().engine !== 'cube') return intent
+  try {
+    const analysisPlan = await buildAnalysisPlanPreview({
+      metricId,
+      intent,
+      userQuery,
+      dis: null
+    })
+    return { ...intent, analysisPlan }
+  } catch (err) {
+    console.warn(`[analysis] 生成分析计划失败: ${err instanceof Error ? err.message : err}`)
+    return intent
+  }
+}
+
 async function streamAssistantText(
   emit: SseWriter,
   session: AnalysisSession,
@@ -138,10 +159,9 @@ async function runExecuting(
   const expMatch = matchExperience(query, assets.experiences)
   const view = session.intent?.view || ''
 
-  const steps: ExecutionStep[] = [
-    { id: 's1', label: '⏳ 查询中…', status: 'pending' },
+  const semanticSteps: ExecutionStep[] = [
     {
-      id: 's2',
+      id: 'semantic_exp',
       label: expMatch
         ? `命中经验层案例 ${expMatch.exp.id}（相似度 ${expMatch.score}%）`
         : '未命中经验层案例',
@@ -149,39 +169,44 @@ async function runExecuting(
       highlight: expMatch ? 'exp_reuse' : undefined
     },
     {
-      id: 's3',
+      id: 'semantic_dis',
       label: dis
         ? `应用澄清层 ${dis.id}（${dis.conceptA} vs ${dis.conceptB}）→ ${dis.entityIdA || session.intent?.metricId || ''}`
         : '无需应用澄清层',
       status: 'pending',
       highlight: dis ? 'dis_apply' : undefined
-    },
-    { id: 's4', label: `查询 View：${view}`, status: 'pending' },
-    { id: 's5', label: `执行 SQL：${session.intent?.metric || session.intent?.measureShort || '指标'}`, status: 'pending' }
+    }
+  ]
+  const planSteps: ExecutionStep[] = (session.intent?.analysisPlan || []).map(step => ({
+    id: step.id,
+    label: step.title,
+    status: 'pending',
+    detail: step.cubeQuery ? JSON.stringify(step.cubeQuery, null, 2) : step.description
+  }))
+  const steps: ExecutionStep[] = [
+    ...semanticSteps,
+    ...(planSteps.length
+      ? planSteps
+      : [{ id: 'query_execute', label: `执行查询：${session.intent?.metric || session.intent?.measureShort || '指标'}`, status: 'pending' as const }])
   ]
 
   session.steps = steps
   session.context.queryEngine = getQueryEngineInfo().engine
   await emit({ type: 'session', session: { ...session } })
 
-  for (let i = 0; i < steps.length; i++) {
-    if (steps[i].id === 's5') continue
+  for (let i = 0; i < semanticSteps.length; i++) {
     steps[i].status = 'running'
     await emit({ type: 'session', session: { ...session } })
     steps[i].status = 'done'
-    if (expMatch && steps[i].id === 's2') {
+    if (expMatch && steps[i].id === 'semantic_exp') {
       session.context.expHit = `${expMatch.exp.id}（${expMatch.score}%）`
     }
-    if (dis && steps[i].id === 's3') {
+    if (dis && steps[i].id === 'semantic_dis') {
       session.context.disApplied = `${dis.id} → ${dis.entityIdA || session.intent?.metricId}`
     }
-    if (steps[i].id === 's4') session.context.view = view
     await emit({ type: 'session', session: { ...session } })
   }
-
-  const s5 = steps.find(s => s.id === 's5')!
-  s5.status = 'running'
-  await emit({ type: 'session', session: { ...session } })
+  session.context.view = view
 
   const metricForQuery = {
     id: session.intent?.metricId || '',
@@ -193,16 +218,41 @@ async function runExecuting(
     if (!session.intent) throw new Error('缺少意图确认信息')
     const tq = Date.now()
     console.log(`[analysis] 执行查询 view=${session.intent.view} queryType=${session.intent.queryType} measure=${session.intent.measureShort}`)
+    const updateStep = async (
+      stepId: string,
+      status: 'running' | 'done' | 'error',
+      detail?: string
+    ) => {
+      const step = steps.find(s => s.id === stepId) || steps.find(s => !s.id.startsWith('semantic_') && s.status === 'pending')
+      if (!step) return
+      step.status = status
+      if (detail) step.detail = detail
+      await emit({ type: 'session', session: { ...session } })
+    }
+    if (!planSteps.length) {
+      await updateStep('query_execute', 'running')
+    }
     const output = await runAnalysisQuery({
       metric: metricForQuery,
       intent: session.intent,
       userQuery: query,
-      dis: dis ?? undefined
+      dis: dis ?? undefined,
+      onProgress: updateStep
     })
     console.log(`[analysis] 查询完成 ${Date.now() - tq}ms rowCount=${output.rowCount} chartType=${output.chartType}`)
-    s5.status = 'done'
-    s5.label = `SQL 执行完成（${output.rowCount} 行）`
-    s5.detail = output.sql
+    for (const step of steps) {
+      if (!step.id.startsWith('semantic_') && step.status === 'pending') {
+        step.status = 'done'
+      }
+    }
+    if (!planSteps.length) {
+      const executeStep = steps.find(s => s.id === 'query_execute')
+      if (executeStep) {
+        executeStep.status = 'done'
+        executeStep.label = `查询完成（${output.rowCount} 行）`
+        executeStep.detail = output.sql
+      }
+    }
     session.context.metric = session.intent.metric || session.intent.measureShort
     session.context.executedSql = output.sql
     session.context.statusLabel = '执行完成'
@@ -228,8 +278,13 @@ async function runExecuting(
   } catch (err) {
     const msg = err instanceof Error ? err.message : '查询失败'
     console.error(`[analysis] 查询失败: ${msg}`)
-    s5.status = 'error'
-    s5.label = `SQL 执行失败：${msg}`
+    const active = steps.find(s => !s.id.startsWith('semantic_') && s.status === 'running')
+      || steps.find(s => !s.id.startsWith('semantic_') && s.status === 'pending')
+      || steps[steps.length - 1]
+    if (active) {
+      active.status = 'error'
+      active.label = `${active.label}：${msg}`
+    }
     session.context.statusLabel = '查询失败'
     session.phase = 'result'
     session.result = {
@@ -450,7 +505,7 @@ export async function handleAnalysisEvent(
     session.thinking = false
     session.phase = 'intent_confirm'
     session.chips = undefined
-    session.intent = buildIntent(
+    const builtIntent = buildIntent(
       text,
       llmMatch.measureTitle || llmMatch.measureShort || '业务指标',
       '',
@@ -464,6 +519,7 @@ export async function handleAnalysisEvent(
       llmMatch.topN,
       llmMatch.rankMeasureShort
     )
+    session.intent = await attachAnalysisPlan(builtIntent, text)
     session.context = {
       statusLabel: '待确认意图',
       metric: llmMatch.measureTitle || llmMatch.measureShort || undefined,
@@ -491,11 +547,11 @@ export async function handleAnalysisEvent(
   }
 
   if (event.type === 'update_intent') {
-    session.intent = event.intent
+    session.intent = await attachAnalysisPlan(event.intent, session.userQuery || event.intent.summary, event.intent.metricId || '')
     session.intentEditing = false
-    session.context.timeRange = event.intent.timeRange
-    session.context.metric = event.intent.metric
-    session.context.view = event.intent.view
+    session.context.timeRange = session.intent.timeRange
+    session.context.metric = session.intent.metric
+    session.context.view = session.intent.view
     await emit({ type: 'session', session })
     await emit({ type: 'done' })
     return

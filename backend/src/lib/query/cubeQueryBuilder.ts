@@ -81,3 +81,40 @@ export function buildDistributionQuery(spec: AnalysisQuerySpec, measure: string)
     limit: 100
   }
 }
+
+/** 第一步：按维度计算 Top N，用于后续逐个维度值查趋势。 */
+export function buildTopNRankQuery(spec: AnalysisQuerySpec, rankMeasure: string): CubeQuery {
+  if (!spec.breakdownDimension) {
+    throw new Error('TopN 查询缺少排名维度')
+  }
+  return {
+    measures: [rankMeasure],
+    dimensions: [spec.breakdownDimension],
+    timeDimensions: [makeTimeDim(spec)],
+    filters: spec.filters,
+    order: { [rankMeasure]: 'desc' },
+    limit: spec.topN || 5
+  }
+}
+
+/** 第二步：限定 Top N 维度值后，按天拉取每个维度值的趋势。 */
+export function buildTopNTrendQuery(
+  spec: AnalysisQuerySpec,
+  measure: string,
+  topValues: string[]
+): CubeQuery {
+  if (!spec.breakdownDimension) {
+    throw new Error('TopN 趋势查询缺少排名维度')
+  }
+  return {
+    measures: [measure],
+    dimensions: [spec.breakdownDimension],
+    timeDimensions: [makeTimeDim(spec, 'day')],
+    filters: [
+      ...spec.filters,
+      { member: spec.breakdownDimension, operator: 'equals', values: topValues }
+    ],
+    order: { [spec.timeDimension]: 'asc' },
+    limit: Math.max(500, topValues.length * 120)
+  }
+}

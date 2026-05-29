@@ -36,6 +36,15 @@ export interface IntentCard {
   topN?: number
   /** trend_top_n：用于排名的指标短名（不填则与 measureShort 相同） */
   rankMeasureShort?: string
+  /** 用户确认前可查看的分步分析计划，每一步可附带 Cube 请求参数预览 */
+  analysisPlan?: AnalysisPlanStep[]
+}
+
+export interface AnalysisPlanStep {
+  id: string
+  title: string
+  description: string
+  cubeQuery?: unknown
 }
 
 export interface ExecutionStep {

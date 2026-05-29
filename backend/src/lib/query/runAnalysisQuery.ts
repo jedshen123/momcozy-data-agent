@@ -13,6 +13,7 @@ export async function runAnalysisQuery(params: {
   intent: IntentCard
   userQuery: string
   dis?: DisambiguationRecord | null
+  onProgress?: (stepId: string, status: 'running' | 'done' | 'error', detail?: string) => Promise<void>
 }): Promise<AnalysisQueryOutput> {
   if (getQueryEngineMode() === 'cube') {
     return runCubeAnalysisQuery(params)

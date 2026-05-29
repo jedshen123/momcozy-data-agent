@@ -11,7 +11,7 @@ import { dispatchAnalysisEvent } from './analysisApi'
 const examples = [
   '查询APP总用户数是多少',
   '绑定各个设备的用户数分布',
-  '最近15天有效绑定M9的社区活跃用户数趋势',
+  '查询近15天绑定设备Top5的社区活跃用户数趋势',
 ]
 
 const btn = (primary?: boolean): React.CSSProperties => ({
@@ -65,7 +65,7 @@ export default function AnalysisPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [session.turns, session.phase, session.steps, session.thinking])
+  }, [session.turns, session.phase, session.steps, session.thinking, session.intent])
 
   useEffect(() => {
     if (session.depositionPrefill) {
@@ -410,6 +410,31 @@ function IntentBlock({
               <span key={i} style={{ fontSize: '0.8125rem', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '0.375rem', padding: '0.1rem 0.5rem' }}>
                 {f.title || f.dimension}：{f.values.join(' / ')}
               </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {intent.analysisPlan && intent.analysisPlan.length > 0 && (
+        <div style={{ marginTop: '0.75rem' }}>
+          <strong>分析步骤</strong>
+          <div style={{ marginTop: '0.5rem', display: 'grid', gap: '0.5rem' }}>
+            {intent.analysisPlan.map((step, i) => (
+              <div key={step.id} style={{ padding: '0.65rem 0.75rem', border: '1px solid #e5e7eb', borderRadius: '0.5rem', background: '#f9fafb' }}>
+                <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#111827' }}>
+                  {i + 1}. {step.title}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#6b7280', lineHeight: 1.6, marginTop: '0.2rem' }}>
+                  {step.description}
+                </div>
+                {step.cubeQuery != null && (
+                  <details style={{ marginTop: '0.45rem' }}>
+                    <summary style={{ fontSize: '0.75rem', color: '#2563eb', cursor: 'pointer' }}>查看 Cube 请求参数</summary>
+                    <pre style={{ marginTop: '0.35rem', padding: '0.6rem', background: '#fff', border: '1px solid #e5e7eb', borderRadius: '0.375rem', fontSize: '0.68rem', overflow: 'auto', maxHeight: '180px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                      {JSON.stringify(step.cubeQuery, null, 2)}
+                    </pre>
+                  </details>
+                )}
+              </div>
             ))}
           </div>
         </div>

@@ -19,7 +19,20 @@ export interface IntentCard {
   metric?: string
   metricId?: string
   view?: string
+  measureShort?: string
+  breakdownShort?: string | null
+  queryType?: 'trend' | 'breakdown' | 'trend_breakdown' | 'scalar' | 'trend_top_n'
   filterConditions?: Array<{ dimension: string; operator: string; values: string[]; title?: string }>
+  topN?: number
+  rankMeasureShort?: string
+  analysisPlan?: AnalysisPlanStep[]
+}
+
+export interface AnalysisPlanStep {
+  id: string
+  title: string
+  description: string
+  cubeQuery?: unknown
 }
 
 export interface ExecutionStep {

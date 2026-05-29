@@ -23,6 +23,8 @@ export interface AnalysisQuerySpec {
   filters: CubeFilter[]
   /** 每日快照表：scalar 查询需取最新分区 */
   snapshot: boolean
+  topN?: number
+  rankMeasure?: string
 }
 
 function detectBreakdownShort(userQuery: string): string | null {
@@ -99,6 +101,7 @@ export async function buildAnalysisQuerySpec(params: {
   }
 
   const filters = await buildFilters(viewName, params.userQuery, metric, params.intent.filterConditions)
+  const topN = params.intent.topN && params.intent.topN > 0 ? Math.min(Math.round(params.intent.topN), 20) : undefined
 
   // queryType：intent 优先（LLM 已识别），否则按是否有拆分维度推断
   const queryType: QueryType = params.intent.queryType
@@ -122,13 +125,18 @@ export async function buildAnalysisQuerySpec(params: {
       timeStart: start,
       timeEnd: end,
       filters,
-      snapshot: view.snapshot
+      snapshot: view.snapshot,
+      topN
     }
   }
 
   // 简单指标：语义层注册 measure > LLM 给出的 measureShort > 兜底
   const measureShort = metric?.measure || params.intent.measureShort || 'm_app_dau'
   const primaryMeasure = await resolveViewMember(viewName, measureShort, view)
+  const rankMeasureShort = params.intent.rankMeasureShort || measureShort
+  const rankMeasure = params.intent.queryType === 'trend_top_n'
+    ? await resolveViewMember(viewName, rankMeasureShort, view)
+    : undefined
 
   return {
     metricId: metric?.id || '',
@@ -142,7 +150,9 @@ export async function buildAnalysisQuerySpec(params: {
     timeStart: start,
     timeEnd: end,
     filters,
-    snapshot: view.snapshot
+    snapshot: view.snapshot,
+    topN,
+    rankMeasure
   }
 }
 
