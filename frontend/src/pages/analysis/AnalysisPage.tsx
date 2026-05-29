@@ -506,6 +506,18 @@ function ResultBlock({
     display: b.value
   }))
   const totalBreak = breakdownData.reduce((s, b) => s + b.value, 0) || 1
+  const multiLineData = chartType === 'line_multi' && result.multiSeries
+    ? Array.from(
+        result.multiSeries.reduce((byDate, series) => {
+          for (const point of series.data) {
+            const row = byDate.get(point.date) || { date: point.date }
+            row[series.name] = point.value
+            byDate.set(point.date, row)
+          }
+          return byDate
+        }, new Map<string, Record<string, string | number>>()).values()
+      ).sort((a, b) => String(a.date).localeCompare(String(b.date)))
+    : []
 
   return (
     <div style={{ margin: '1rem 0', padding: '1.25rem', border: '1px solid #e5e7eb', borderRadius: '0.875rem', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
@@ -530,12 +542,10 @@ function ResultBlock({
       {chartType === 'line_multi' && result.multiSeries && result.multiSeries.length > 0 && (
         <div style={{ marginBottom: '1.5rem' }}>
           <ResponsiveContainer width="100%" height={220}>
-            <LineChart margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
+            <LineChart data={multiLineData} margin={{ top: 4, right: 16, bottom: 0, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
               <XAxis
                 dataKey="date"
-                type="category"
-                allowDuplicatedCategory={false}
                 tickFormatter={formatDate}
                 tick={{ fontSize: 11, fill: '#9ca3af' }}
                 axisLine={false}
@@ -558,9 +568,8 @@ function ResultBlock({
               {result.multiSeries.map(s => (
                 <Line
                   key={s.name}
-                  data={s.data}
                   type="monotone"
-                  dataKey="value"
+                  dataKey={s.name}
                   name={s.name}
                   stroke={s.color}
                   strokeWidth={2}

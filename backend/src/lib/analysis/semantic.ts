@@ -250,39 +250,6 @@ function enrichWithTitle(
   return candidate
 }
 
-function matchTopDeviceCommunityTrendHeuristic(
-  userQuery: string,
-  catalog: ViewMap
-): LLMViewMatch | null {
-  const isTopDeviceTrend = /top\s*\d+|前\s*\d+|Top\s*\d+/i.test(userQuery)
-    && /设备|型号/.test(userQuery)
-    && /社区活跃|社区.*活跃/.test(userQuery)
-    && /趋势|走势|近\d+天/.test(userQuery)
-  if (!isTopDeviceTrend || !catalog.has('app_detail_exploration')) return null
-
-  const entry = catalog.get('app_detail_exploration')!
-  const required = ['bind_active_user_count', 'model', 'bind_user_count', 'moment_act_flag']
-  if (!required.every(item => entry.includes.has(item))) return null
-
-  const topNMatch = userQuery.match(/(?:top|Top|TOP|前)\s*(\d+)/)
-  const topN = topNMatch ? Math.min(Number(topNMatch[1]), 20) : 5
-  return {
-    viewName: 'app_detail_exploration',
-    measureShort: 'bind_active_user_count',
-    measureTitle: '绑定设备社区活跃用户数',
-    breakdownShort: 'model',
-    queryType: 'trend_top_n',
-    topN,
-    rankMeasureShort: 'bind_user_count',
-    filterConditions: [{
-      dimension: 'moment_act_flag',
-      operator: 'equals',
-      values: ['1'],
-      title: '社区活跃标识'
-    }]
-  }
-}
-
 export interface PrevIntentContext {
   measureShort?: string
   breakdownShort?: string | null
@@ -314,9 +281,6 @@ export async function matchViewByLLM(
     queryType: 'trend_breakdown',
     filterConditions: []
   }
-
-  const heuristic = matchTopDeviceCommunityTrendHeuristic(userQuery, catalog)
-  if (heuristic) return heuristic
 
   if (!views.length || !process.env.DEEPSEEK_API_KEY) return fallback
 
@@ -440,7 +404,7 @@ breakdownShort 选取规则：
 - 不要默认选地理/国家维度；只有用户明确提到"国家/地区"时才选地理维度
 - 若用户未指定分组维度且 queryType=breakdown，选该 view 最具业务代表性的维度
 - 若当前 view 没有与用户分组意图匹配的 dimension，换一个有该 dimension 的 view 作为候选，不能用与用户意图无关的维度替代
-- 用户问"绑定设备TopN的社区活跃用户数趋势"时，应选择 app_detail_exploration，queryType=trend_top_n，measureShort=bind_active_user_count，breakdownShort=model，rankMeasureShort=bind_user_count，并添加 filterConditions: moment_act_flag equals 1
+- 当用户描述"先按某指标取 Top N，再看另一指标趋势"时，不要把它简化成普通趋势；必须输出 queryType=trend_top_n，并分别填写 measureShort（最终趋势指标）、breakdownShort（TopN 排名维度）、topN、rankMeasureShort（排名指标）
 
 【澄清规则 — 遇到以下情况必须返回澄清，而不是猜测】：
 1. 指标语义模糊：用户描述（如"业绩"、"表现"、"数据"）对应多个 measure，无法确定唯一指标
