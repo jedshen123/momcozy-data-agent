@@ -21,7 +21,8 @@ import type {
   ExecutionStep,
   IntentCard,
   QueryType,
-  ResultHistoryEntry
+  ResultHistoryEntry,
+  ResultPayload
 } from './types.js'
 import { emptySession } from './types.js'
 import { runAnalysisQuery } from '../query/runAnalysisQuery.js'
@@ -301,6 +302,7 @@ async function runExecuting(
 }
 
 const COMPARE_PATTERN = /对比|比较|一起看|放一起|叠加|同图|合并/
+const EXISTING_RESULT_REASONING_PATTERN = /当前趋势|按照.*趋势|按.*趋势|预测|预计|预估|推算|外推|年底|年末|月底|月末|能否|能不能|能.*达|会不会|多久|什么时候.*达/
 
 /**
  * 检测"对比已有数据"意图：用户问"对比它们"/"比较两个"时，
@@ -354,6 +356,137 @@ async function tryHandleComparison(
   return true
 }
 
+function fmtValue(n: number) {
+  if (n >= 100000000) return `${(n / 100000000).toFixed(2)}亿`
+  if (n >= 10000) return `${(n / 10000).toFixed(2)}万`
+  return n.toLocaleString('zh-CN', { maximumFractionDigits: 0 })
+}
+
+function parseLocalDate(s: string) {
+  const [year, month, day] = s.slice(0, 10).split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+function formatLocalDate(d: Date) {
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function addDays(d: Date, days: number) {
+  const next = new Date(d)
+  next.setDate(next.getDate() + days)
+  return next
+}
+
+function diffDays(a: Date, b: Date) {
+  return Math.round((b.getTime() - a.getTime()) / 86400000)
+}
+
+function parseTargetValue(text: string): number | null {
+  const m = text.match(/(?:达到|到达|超过|突破|破|到)\s*(\d+(?:\.\d+)?)\s*(亿|千万|百万|万)?/)
+    || text.match(/(\d+(?:\.\d+)?)\s*(亿|千万|百万|万)/)
+  if (!m) return null
+  const n = Number(m[1])
+  if (!Number.isFinite(n)) return null
+  const unit = m[2]
+  if (unit === '亿') return n * 100000000
+  if (unit === '千万') return n * 10000000
+  if (unit === '百万') return n * 1000000
+  if (unit === '万') return n * 10000
+  return n
+}
+
+function inferDeadline(text: string, lastDate: Date): Date | null {
+  if (/明年.*(年底|年末)/.test(text)) return new Date(lastDate.getFullYear() + 1, 11, 31)
+  if (/年底|年末|今年底/.test(text)) return new Date(lastDate.getFullYear(), 11, 31)
+  if (/月底|月末/.test(text)) return new Date(lastDate.getFullYear(), lastDate.getMonth() + 1, 0)
+  return null
+}
+
+function buildExistingTrendAnswer(text: string, result: ResultPayload): string | null {
+  const series = (result.series || [])
+    .filter(p => p.date && Number.isFinite(p.value))
+    .sort((a, b) => a.date.localeCompare(b.date))
+  if (series.length < 2) return null
+
+  const first = series[0]
+  const last = series[series.length - 1]
+  const firstDate = parseLocalDate(first.date)
+  const lastDate = parseLocalDate(last.date)
+  const observedDays = diffDays(firstDate, lastDate)
+  if (observedDays <= 0) return null
+
+  const dailyChange = (last.value - first.value) / observedDays
+  const target = parseTargetValue(text)
+  const deadline = inferDeadline(text, lastDate)
+  const metricLabel = (result.chartTitle.split('（')[0] || '该指标')
+    .replace(/\s*(趋势|分布|汇总|& 分布)\s*$/, '')
+  const trendDesc = dailyChange >= 0 ? '增长' : '下降'
+
+  const lines = [
+    `可以，当前问题能直接基于上一轮已查询出的 ${series.length} 个趋势点推算，不需要再次查询数据。`,
+    '',
+    `从 ${first.date} 到 ${last.date}，${metricLabel}从 ${fmtValue(first.value)} 变为 ${fmtValue(last.value)}，平均每天${trendDesc}约 ${fmtValue(Math.abs(dailyChange))}。`
+  ]
+
+  if (target != null && deadline) {
+    const daysToDeadline = diffDays(lastDate, deadline)
+    const forecast = last.value + dailyChange * daysToDeadline
+    const gap = forecast - target
+    const canReach = forecast >= target
+    lines.push(
+      `按这个线性趋势外推到 ${formatLocalDate(deadline)}，预计约 ${fmtValue(forecast)}。`,
+      canReach
+        ? `结论：有机会达到 ${fmtValue(target)}，预计高出目标约 ${fmtValue(Math.abs(gap))}。`
+        : `结论：按当前趋势还到不了 ${fmtValue(target)}，预计差约 ${fmtValue(Math.abs(gap))}。`
+    )
+    return lines.join('\n')
+  }
+
+  if (target != null) {
+    if (last.value >= target) {
+      lines.push(`结论：当前最新值已经达到 ${fmtValue(target)}。`)
+    } else if (dailyChange > 0) {
+      const daysToTarget = Math.ceil((target - last.value) / dailyChange)
+      lines.push(`按当前趋势，预计在 ${formatLocalDate(addDays(lastDate, daysToTarget))} 左右达到 ${fmtValue(target)}。`)
+    } else {
+      lines.push(`结论：当前趋势不是上升趋势，暂时无法按现有走势达到 ${fmtValue(target)}。`)
+    }
+    return lines.join('\n')
+  }
+
+  lines.push(`结论：现有数据已经足够支撑趋势推断，无需补充视图查询。`)
+  return lines.join('\n')
+}
+
+async function tryHandleExistingResultReasoning(
+  session: AnalysisSession,
+  text: string,
+  emit: SseWriter
+): Promise<boolean> {
+  if (!EXISTING_RESULT_REASONING_PATTERN.test(text)) return false
+  const latest = [...(session.resultHistory || [])]
+    .reverse()
+    .find(entry => (entry.result.series?.length || 0) >= 2)
+  if (!latest) return false
+
+  const answer = buildExistingTrendAnswer(text, latest.result)
+  if (!answer) return false
+
+  session.thinking = false
+  session.phase = 'idle'
+  session.chips = undefined
+  session.steps = undefined
+  session.intentEditing = false
+  session.context.statusLabel = '已基于已有结果回答'
+  await streamAssistantText(emit, session, answer)
+  await emit({ type: 'session', session: { ...session } })
+  await emit({ type: 'done' })
+  return true
+}
+
 export async function handleAnalysisEvent(
   sessionIn: AnalysisSession | null,
   event: ClientEvent,
@@ -399,6 +532,7 @@ export async function handleAnalysisEvent(
 
     // 优先检测"对比已有数据"意图，避免重新发起查询
     if (await tryHandleComparison(session, text, emit)) return
+    if (await tryHandleExistingResultReasoning(session, text, emit)) return
 
     const assets = await loadSemanticAssets()
     const cap = detectCapabilityGap(text, assets.metrics)
